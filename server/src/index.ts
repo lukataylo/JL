@@ -13,6 +13,7 @@ import { close, release } from "./settle.js";
 import { acceptCounter, negotiate, negotiationFor } from "./negotiate.js";
 import * as fundsApi from "./funds.js";
 import { MODEL, agentEnabled } from "./agent.js";
+import { seedDemo } from "./seed.js";
 import type { AuthRequest, Transaction } from "./types.js";
 
 const app = express();
@@ -101,6 +102,13 @@ app.post("/api/cards/:id/freeze", async (req, res) => {
   res.json(repo.card(card.id));
 });
 
+/** Wipes and reseeds the demo company so every run starts at £0. */
+app.post("/api/demo/reset", async (_req, res) => {
+  await seedDemo();
+  broadcast("reset", {});
+  res.json({ ok: true });
+});
+
 app.get("/api/policy", (_req, res) => res.json({ policy: POLICY, rules: RULES }));
 
 app.get("/api/audit", (_req, res) => res.json(repo.recentTransactions(100)));
@@ -115,7 +123,12 @@ app.get("/api/approvals", (_req, res) => res.json(repo.approvals()));
 app.post("/api/approvals/:id", async (req, res) => {
   const approval = repo.approval(req.params.id);
   if (!approval || approval.status !== "pending") return res.status(409).json({ error: "not pending" });
-  const { action, approver = "Priya Shah", note = null } = req.body as { action: "approve" | "reject"; approver?: string; note?: string | null };
+  const { action, approverId, note = null } = req.body as { action: "approve" | "reject"; approverId?: string; note?: string | null };
+  // Only a finance-role employee can decide, and their name comes from the record, not the request.
+  const approverEmp = approverId ? repo.employee(approverId) : undefined;
+  if (!approverEmp || approverEmp.role !== "finance") return res.status(403).json({ error: "Only Finance can approve or reject." });
+  if (approverEmp.id === approval.employee_id) return res.status(403).json({ error: "You can't approve your own request." });
+  const approver = approverEmp.name;
   if (approval.transaction_id.startsWith("req_")) {
     repo.resolveApproval(approval.id, action === "approve" ? "used" : "rejected", approver, note);
     await fundsApi.decideReferred(approval.transaction_id, action === "approve", approver, approval.amount);
@@ -143,7 +156,6 @@ app.get("/api/transactions/:id/negotiation", (req, res) => {
 app.post("/api/transactions/:id/negotiation", async (req, res) => {
   const tx = repo.transaction(req.params.id);
   if (!tx) return res.status(404).json({ error: "not found" });
-  if (!agentEnabled()) return res.status(503).json({ error: "Add ANTHROPIC_API_KEY to server/.env to negotiate with Clearance." });
   try {
     const result = req.body.accept ? await acceptCounter(tx) : await negotiate(tx, String(req.body.message ?? "").slice(0, 1000));
     res.json(result);
@@ -163,7 +175,6 @@ app.post("/api/requests", async (req, res) => {
   const { employeeId, message, requestId = null, category = null } = req.body as { employeeId: string; message: string; requestId?: string | null; category?: string | null };
   const employee = repo.employee(employeeId);
   if (!employee) return res.status(404).json({ error: "employee not found" });
-  if (!agentEnabled()) return res.status(503).json({ error: "Add ANTHROPIC_API_KEY to server/.env to talk to Clearance." });
   try {
     res.json(await fundsApi.talk(employee, requestId, String(message ?? "").slice(0, 1000), category));
   } catch (err) {
@@ -257,7 +268,7 @@ if (existsSync(webDist)) {
 
 const port = Number(process.env.PORT ?? 4242);
 await detectStripeMode();
-if (repo.employees().length === 0) await import("./seed.js");
+if (repo.employees().length === 0) await seedDemo();
 app.listen(port, () => {
   console.log(`Clearance API on http://localhost:${port}`);
   console.log(`  Stripe: ${stripeMode} · Agent: ${agentEnabled() ? MODEL : "off (flags escalate)"}`);

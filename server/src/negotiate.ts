@@ -1,6 +1,6 @@
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import { client, MODEL } from "./agent.js";
+import { CHAT_MODEL, CHAT_TIMEOUT_MS, client } from "./agent.js";
 import { newId, repo } from "./db.js";
 import { recall } from "./memory.js";
 import { POLICY, RULES, gbp } from "./policy.js";
@@ -77,19 +77,24 @@ export async function negotiate(tx: Transaction, text: string) {
 
   const response = await client.messages.parse(
     {
-      model: MODEL,
-      max_tokens: 4096,
+      model: CHAT_MODEL,
+      max_tokens: 800,
       system: SYSTEM.replace("${approver}", approverName()),
       messages: [{
         role: "user",
         content: `<case_file>\n${JSON.stringify(caseFile, null, 2)}\n</case_file>\n\n<conversation>\n${transcript}\n</conversation>\n\nReply as Clearance.`,
       }],
-      output_config: { effort: "medium", format: zodOutputFormat(Turn) },
+      output_config: { effort: "low", format: zodOutputFormat(Turn) },
     },
-    { timeout: 45_000 },
-  );
-  const turn = response.parsed_output;
-  if (response.stop_reason === "refusal" || !turn) throw new Error("Clearance couldn't respond to that. Try rephrasing.");
+    { timeout: CHAT_TIMEOUT_MS, maxRetries: 0 },
+  ).catch((err: Error) => {
+    console.warn("[negotiate] Claude unavailable, referring:", err.message);
+    return null;
+  });
+  // Fallback when Claude is unavailable: hand it to a human rather than guess.
+  const turn = response && response.stop_reason !== "refusal" && response.parsed_output
+    ? response.parsed_output
+    : { reply: "I can't review this right now, so I've passed it to Finance with your message.", outcome: "refer" as const, counter_amount_pence: null, cited_rules: [], memory_note: null };
 
   // Guardrails: the model proposes, code disposes.
   let { outcome, reply } = turn;
@@ -114,7 +119,6 @@ export async function negotiate(tx: Transaction, text: string) {
     cited_rules: turn.cited_rules.filter((id) => flagged.has(id)),
   };
   neg.messages.push(agentMsg);
-  if (turn.memory_note) repo.addMemory(employee.id, turn.memory_note);
 
   let updated = tx;
   if (outcome === "approve") {

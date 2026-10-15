@@ -9,8 +9,10 @@ import "./funds.js";
 import { CURRENCY, stripe } from "./stripe.js";
 import { categorize } from "./policy.js";
 import type { Card, Employee } from "./types.js";
+import { pathToFileURL } from "node:url";
 
-const withStripe = process.argv.includes("--stripe");
+/** Wipes everything and loads the demo company. Also behind POST /api/demo/reset. */
+export async function seedDemo(withStripe = false) {
 if (withStripe && !stripe) throw new Error("Set STRIPE_SECRET_KEY (sk_test_...) to seed Stripe.");
 
 db.exec("DELETE FROM employees; DELETE FROM cards; DELETE FROM transactions; DELETE FROM approvals; DELETE FROM memories; DELETE FROM negotiations; DELETE FROM fund_requests;");
@@ -85,3 +87,6 @@ repo.addMemory("emp_tom", "Tom is closing the Northwind deal; client dinners up 
 repo.addMemory("emp_tom", "Tom has a history of late-night client entertainment receipts being queried by finance.");
 
 console.log(`Seeded ${people.length} employees${withStripe ? " with Stripe test-mode cards" : " (local cards)"}.`);
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) await seedDemo(process.argv.includes("--stripe"));

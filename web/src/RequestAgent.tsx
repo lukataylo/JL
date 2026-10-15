@@ -343,7 +343,8 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
   else statusLine = SpeechRec ? "Tap the mic and tell Clearance" : "Tell Clearance what you need";
 
   const msgs: NegotiationMessage[] = req?.messages ?? [];
-  const showChips = !req && !busy && !listening && !text;
+  // Without voice, keep the suggestions around while the request is open so the demo can't stall.
+  const showChips = (!req || (!SpeechRec && (req.status === "open"))) && !busy && !listening && !text;
 
   return (
     <div className={`ra-overlay${closing ? " is-closing" : ""}`} role="dialog" aria-modal="true" aria-label="Ask Clearance for funds">

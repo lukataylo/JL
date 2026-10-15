@@ -258,7 +258,7 @@ export default function App() {
                 key={a.id}
                 approval={a}
                 who={nameOf(a.employee_id)}
-                onResolve={employee.role === "finance" ? async (action) => { await api.resolve(a.id, action); await refresh(); } : undefined}
+                onResolve={employee.role === "finance" ? async (action) => { await api.resolve(a.id, action, employee.id); await refresh(); } : undefined}
               />
             ))}
             {employee.role !== "finance" && pending.length > 0 && (
@@ -407,7 +407,10 @@ function Welcome({ employees, onChoose, error }: { employees: Employee[]; onChoo
             <Icon name="chevronRight" size={18} className="pill-chev" />
           </button>
         ))}
-        <p className="welcome-foot"><Icon name="lock" size={13} /> Stripe test mode · demo company Acme</p>
+        <p className="welcome-foot">
+          <Icon name="lock" size={13} /> Stripe test mode · demo company Acme ·{" "}
+          <button className="link" onClick={async () => { if (confirm("Wipe all demo data and start every card at £0?")) { await api.resetDemo(); location.reload(); } }}>Reset demo</button>
+        </p>
       </div>
     </div>
   );

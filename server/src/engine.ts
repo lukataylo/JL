@@ -2,7 +2,7 @@ import { newId, repo } from "./db.js";
 import { evaluate } from "./rules.js";
 import { funds, spendFrom } from "./funds.js";
 import { broadcast } from "./events.js";
-import { categorize, gbp } from "./policy.js";
+import { POLICY, categorize, gbp } from "./policy.js";
 import type { AuthRequest, DecidedBy, RuleResult, Status, Transaction } from "./types.js";
 
 const cite = (rules: RuleResult[], ...outcomes: RuleResult["outcome"][]) =>
@@ -23,6 +23,12 @@ export async function decide(req: AuthRequest): Promise<Transaction> {
   let summary: string;
   const category = categorize(req.mcc);
   const { match: cover, wrongPurpose } = funds.coverFor(req.employee.id, req.amount, category);
+  const { mealsUpTo, approvedVendorsUpTo } = POLICY.standingAllowances;
+  const approvedVendor = POLICY.approvedVendors.some((v) => v.toLowerCase() === req.merchant.toLowerCase());
+  const standing = cover ? null
+    : category === "meals" && req.amount <= mealsUpTo ? `meals up to ${gbp(mealsUpTo)} are a standing allowance.`
+    : approvedVendor && req.amount <= approvedVendorsUpTo ? `${req.merchant} is an approved vendor and this is under ${gbp(approvedVendorsUpTo)}.`
+    : null;
 
   // Funds released up front already cleared limits and budget, so only absolute blocks apply.
   const hardBlocks = cite(results, "block").filter((r) => !((cover || preApproval) && (r.id === "P3" || r.id === "P4")));
@@ -37,6 +43,12 @@ export async function decide(req: AuthRequest): Promise<Transaction> {
     results.push({ id: "P11", title: "Funds first", outcome: "pass", evidence: `Drawn from ${gbp(cover.remaining)} released for "${cover.purpose}" (${cover.id}).` });
     cited = results.slice(-1);
     summary = `Approved from funds released for ${cover.purpose}.`;
+  } else if (standing) {
+    status = "approved";
+    decidedBy = "rules";
+    results.push({ id: "P13", title: "Standing allowances", outcome: "pass", evidence: standing });
+    cited = results.slice(-1);
+    summary = `Approved instantly: ${standing}`;
   } else if (preApproval) {
     status = "approved";
     decidedBy = "pre_approval";

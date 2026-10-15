@@ -76,8 +76,10 @@ export const api = {
   overview: (id: string) => call<Overview>(`/employees/${id}/overview`),
   freeze: (cardId: string, frozen: boolean) => call<Card>(`/cards/${cardId}/freeze`, { method: "POST", body: JSON.stringify({ frozen }) }),
   approvals: () => call<Approval[]>("/approvals"),
-  resolve: (id: string, action: "approve" | "reject", note?: string) =>
-    call<Approval>(`/approvals/${id}`, { method: "POST", body: JSON.stringify({ action, note }) }),
+  /** approverId must be a Finance employee; the server checks the role. */
+  resolve: (id: string, action: "approve" | "reject", approverId: string, note?: string) =>
+    call<Approval>(`/approvals/${id}`, { method: "POST", body: JSON.stringify({ action, approverId, note }) }),
+  resetDemo: () => call<{ ok: boolean }>("/demo/reset", { method: "POST" }),
   audit: () => call<Transaction[]>("/audit"),
   policy: () => call<PolicyDoc>("/policy"),
   negotiation: (txId: string) => call<Negotiation>(`/transactions/${txId}/negotiation`),

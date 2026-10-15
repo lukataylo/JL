@@ -15,6 +15,8 @@ export const POLICY = {
   } satisfies Record<Role, { perTxnLimit: number; categories: Category[] }>,
   prohibitedCategories: ["gambling", "jewelry", "cash"] as Category[],
   approvedVendors: ["Figma", "GitHub", "Notion", "Linear", "AWS", "Vercel", "British Airways", "Eurostar", "Uber", "Pret A Manger"],
+  /** Routine spend approved instantly with no funds request: most spend never talks to Clearance. */
+  standingAllowances: { mealsUpTo: 2_500, approvedVendorsUpTo: 20_000 },
   hardwarePreApprovalOver: 50_000,
   newMerchantReviewOver: 10_000,
   hardBlockMultiple: 3,
@@ -35,6 +37,7 @@ export const RULES = [
   { id: "P10", title: "Manager pre-approval", text: "A manager's approval for a merchant and amount lets one matching payment through." },
   { id: "P11", title: "Funds first", text: "Cards hold £0. Spending needs funds released by Clearance or Finance for that purpose first." },
   { id: "P12", title: "Agreed purpose", text: "Released funds may only be spent in the category they were released for." },
+  { id: "P13", title: "Standing allowances", text: "Meals up to £25 and approved vendors up to £200 are approved instantly, without a funds request." },
 ] as const;
 
 export type RuleId = (typeof RULES)[number]["id"];

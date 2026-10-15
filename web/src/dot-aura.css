@@ -478,3 +478,48 @@ body:has(.ra-overlay) .da-aura:not(.da-aura--approved):not(.da-aura--declined) {
   .hero::before, .da-aura::before, .welcome-art::before, .ra-outcome--ok::before { animation: none !important; transform: none; }
   .da-ruler-rel, .da-ruler-marker { transition: none; }
 }
+
+/* ===================== Flat pass ===================== */
+/* Matches the agent screen: flat fog, white and ink surfaces, wasabi chips.
+ * The aura gradient appears only behind the agent's eyes, the balance hero and a released outcome.
+ * Everything else is one solid colour: no gloss, specular highlights, blooms or tinted gradients. */
+
+/* Orbs and monograms → flat white discs with ink glyphs */
+.da-orb, .mono {
+  background: var(--surface-solid, #fff) !important;
+  color: var(--ink) !important;
+  box-shadow: inset 0 0 0 1px rgba(20, 20, 20, 0.07);
+}
+.mono::before { display: none; }
+.avatar { background: var(--ink) !important; color: #fff !important; }
+
+/* Expense picker dial */
+.ep-orb { background: var(--surface-solid, #fff) !important; color: var(--ink) !important; box-shadow: inset 0 0 0 1px rgba(20, 20, 20, 0.07); }
+.ep-orb svg { filter: none; }
+.ep-icon.is-cur .ep-orb, .ep-ro-orb { background: var(--ink) !important; color: #fff !important; box-shadow: 0 0 0 4px var(--bg), 0 0 0 6px var(--ink); }
+.ep-ro-orb { box-shadow: none; }
+.ep-icon.is-locked .ep-orb { filter: none; opacity: 1; background: transparent !important; color: #b4b4b1 !important; box-shadow: inset 0 0 0 1.5px #d6d6d3; }
+
+/* Request funds button: flat ink, no glow */
+.request-cta::before { display: none; }
+
+/* Request overlay */
+.ra-bloom, .ra-bloom--thinking, .ra-bloom--approved, .ra-bloom--declined { display: none; }
+.ra-msg--employee .ra-bubble { background: var(--ink); box-shadow: none; }
+.ra-mic { background: var(--ink) !important; color: #fff; box-shadow: none !important; }
+.ra-mic.is-on { background: var(--declined) !important; }
+.ra-outcome--bad, .ra-outcome--warn { background: var(--surface-solid, #fff); border-color: transparent; box-shadow: none; }
+.ra-offer-bar span { background: var(--ink); }
+
+/* Card */
+.pcard-chip { background: var(--surface-solid, #fff); }
+
+/* After-the-fact negotiation screen */
+.neg-bubble--employee { background: var(--ink); color: #fff; box-shadow: none; }
+.neg-card, .neg-card--offer, .neg-card--refer, .neg-card--deny, .neg-card--success { background: var(--surface-solid, #fff); border-color: transparent; box-shadow: none; }
+.neg-btn--primary, .neg-card--offer .neg-btn--primary, .neg-success-check, .neg-send { background: var(--ink); color: #fff; box-shadow: none; }
+.neg-offer-bar span { background: var(--ink); }
+.neg-card-icon--brand, .neg-card-icon--agent { background: var(--wasabi); color: var(--ink); }
+.neg-card-foot { color: var(--ink); }
+.neg-offer-legend .dot--brand { background: var(--ink); }
+.neg-chip { background: var(--surface-solid, #fff); box-shadow: none; border-color: transparent; }

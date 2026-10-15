@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AgentOrb } from "./AgentOrb";
 import { api, money, type Negotiation as Neg, type NegotiationMessage, type Transaction } from "./api";
 import "./negotiation.css";
 
@@ -57,11 +58,7 @@ const IconAlert = () => (
 );
 
 function Orb({ size = 40, thinking = false }: { size?: number; thinking?: boolean }) {
-  return (
-    <span className={`neg-orb${thinking ? " is-thinking" : ""}`} style={{ width: size, height: size }} aria-hidden>
-      <span className="neg-orb-core" />
-    </span>
-  );
+  return <AgentOrb state={thinking ? "thinking" : "idle"} size={size} />;
 }
 
 function Rules({ ids }: { ids?: string[] }) {

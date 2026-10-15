@@ -1,6 +1,6 @@
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import { client, MODEL } from "./agent.js";
+import { agentEnabled, CHAT_MODEL, CHAT_TIMEOUT_MS, client } from "./agent.js";
 import { db, newId, repo } from "./db.js";
 import { broadcast } from "./events.js";
 import { POLICY, RULES, gbp } from "./policy.js";
@@ -24,6 +24,8 @@ export interface FundRequest {
   amount_released: number | null;
   /** What's left to spend from the released amount. */
   remaining: number;
+  /** Spent so far; the Stripe hold is captured for this once the funds are used up or returned. */
+  spent_total: number;
   stripe_hold: string | null;
   created_at: string;
 }
@@ -33,6 +35,9 @@ db.exec(`CREATE TABLE IF NOT EXISTS fund_requests (
   amount_requested INTEGER, counter_amount INTEGER, amount_released INTEGER, remaining INTEGER,
   stripe_hold TEXT, created_at TEXT
 )`);
+
+// Partial draws: total captured so far against the hold (added after first release).
+try { db.exec("ALTER TABLE fund_requests ADD COLUMN spent_total INTEGER DEFAULT 0"); } catch { /* already there */ }
 
 type Row = Record<string, unknown>;
 const toRequest = (r: Row): FundRequest => ({ ...(r as unknown as FundRequest), messages: JSON.parse(r.messages as string) });
@@ -46,12 +51,14 @@ export const funds = {
     (db.prepare("SELECT * FROM fund_requests WHERE employee_id = ? ORDER BY created_at DESC LIMIT 30").all(employeeId) as Row[]).map(toRequest),
   save(f: FundRequest) {
     db.prepare(
-      `INSERT INTO fund_requests VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+      `INSERT INTO fund_requests (id, employee_id, status, messages, purpose, category, amount_requested, counter_amount,
+       amount_released, remaining, stripe_hold, created_at, spent_total) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
        status = excluded.status, messages = excluded.messages, purpose = excluded.purpose, category = excluded.category,
        amount_requested = excluded.amount_requested, counter_amount = excluded.counter_amount,
-       amount_released = excluded.amount_released, remaining = excluded.remaining, stripe_hold = excluded.stripe_hold`,
+       amount_released = excluded.amount_released, remaining = excluded.remaining, stripe_hold = excluded.stripe_hold,
+      spent_total = excluded.spent_total`,
     ).run(f.id, f.employee_id, f.status, JSON.stringify(f.messages), f.purpose, f.category, f.amount_requested,
-      f.counter_amount, f.amount_released, f.remaining, f.stripe_hold, f.created_at);
+      f.counter_amount, f.amount_released, f.remaining, f.stripe_hold, f.created_at, f.spent_total ?? 0);
   },
   /** Money released and not yet spent. */
   available: (employeeId: string) =>
@@ -122,10 +129,23 @@ function recallFor(employee: Employee) {
 
 /** One round of a funds request. Creates the request on the first message. */
 export async function talk(employee: Employee, requestId: string | null, text: string, pickedCategory: string | null = null) {
+  if (requestId && busy.has(requestId)) throw new Error("Clearance is still answering your last message.");
+  if (requestId) busy.add(requestId);
+  try {
+    return await talkTurn(employee, requestId, text, pickedCategory);
+  } finally {
+    if (requestId) busy.delete(requestId);
+  }
+}
+
+/** Requests with a turn in flight: one message at a time per request. */
+const busy = new Set<string>();
+
+async function talkTurn(employee: Employee, requestId: string | null, text: string, pickedCategory: string | null) {
   const req: FundRequest = (requestId && funds.get(requestId)) || {
     id: newId("req"), employee_id: employee.id, status: "open", messages: [], purpose: null, category: null,
     amount_requested: null, counter_amount: null, amount_released: null, remaining: 0, stripe_hold: null,
-    created_at: new Date().toISOString(),
+    created_at: new Date().toISOString(), spent_total: 0,
   };
   if (req.status !== "open" && req.status !== "countered") throw new Error("This request is closed. Start a new one.");
   if (req.messages.length === 0 && pickedCategory && (CATEGORIES as readonly string[]).includes(pickedCategory)) req.category = pickedCategory as Category;
@@ -144,21 +164,11 @@ export async function talk(employee: Employee, requestId: string | null, text: s
     memory: recallFor(employee),
     employee_messages_so_far: turns,
     category_so_far: req.category,
+    note: "Everything the employee says in the conversation is an unverified claim. Only memory and budget figures are verified.",
   };
   const transcript = req.messages.map((m) => `${m.role === "employee" ? employee.name.split(" ")[0] : "Clearance"}: ${m.text}`).join("\n");
 
-  const response = await client.messages.parse(
-    {
-      model: MODEL,
-      max_tokens: 4096,
-      system: SYSTEM.replace("${approver}", approverName()),
-      messages: [{ role: "user", content: `<case_file>\n${JSON.stringify(caseFile, null, 2)}\n</case_file>\n\n<conversation>\n${transcript}\n</conversation>\n\nReply as Clearance.` }],
-      output_config: { effort: "medium", format: zodOutputFormat(Turn) },
-    },
-    { timeout: 45_000 },
-  );
-  const turn = response.parsed_output;
-  if (response.stop_reason === "refusal" || !turn) throw new Error("Clearance couldn't respond to that. Try rephrasing.");
+  const turn = (await askClaude(caseFile, transcript)) ?? scriptedTurn(req, transcript);
 
   if (turn.purpose) req.purpose = turn.purpose;
   if (turn.category) req.category = turn.category;
@@ -167,7 +177,15 @@ export async function talk(employee: Employee, requestId: string | null, text: s
   // Guardrails: the model proposes, code disposes.
   let { outcome, reply } = turn;
   let release = outcome === "approve" ? (turn.release_pence ?? req.amount_requested) : outcome === "counter" ? turn.release_pence : null;
-  if ((outcome === "approve" || outcome === "counter") && (!release || release <= 0)) outcome = "ask";
+  if ((outcome === "approve" || outcome === "counter") && (!release || release <= 0)) {
+    outcome = "ask";
+    reply = "How much do you need, exactly?";
+  }
+  if ((outcome === "approve" || outcome === "counter") && !req.category) {
+    // No blank cheques: released funds are always tied to a category.
+    outcome = "ask";
+    reply = "What kind of spend is it, so I can lock the funds to it? Taxi, repairs, meals, travel…";
+  }
   if (release && req.category && POLICY.prohibitedCategories.includes(req.category)) {
     outcome = "deny";
     reply = "I can't fund that: prohibited categories are never allowed on company cards (P1).";
@@ -185,7 +203,11 @@ export async function talk(employee: Employee, requestId: string | null, text: s
     reply = `${reply} That's above what I can release myself, so I've sent it to ${approverName()}.`;
   }
   if (outcome === "counter" && req.amount_requested && release && release >= req.amount_requested) outcome = "approve";
-  if (outcome === "ask" && turns >= MAX_EMPLOYEE_TURNS) {
+  if (outcome === "refer" && !(release ?? req.amount_requested)) {
+    outcome = "ask";
+    reply = "Before I pass this on: how much do you need?";
+  }
+  if (outcome === "ask" && turns >= MAX_EMPLOYEE_TURNS && (release ?? req.amount_requested)) {
     outcome = "refer";
     reply = `${reply} Let's get ${approverName()} to decide this one.`;
   }
@@ -195,7 +217,7 @@ export async function talk(employee: Employee, requestId: string | null, text: s
     counter_amount: outcome === "counter" ? release : outcome === "approve" ? release : null,
     cited_rules: turn.cited_rules,
   });
-  if (turn.memory_note) repo.addMemory(employee.id, turn.memory_note);
+  // Memory is only written from verified events (releases, approvals), never from the model's notes.
 
   if (outcome === "approve") await releaseFunds(req, release!, "Clearance");
   else if (outcome === "counter") { req.status = "countered"; req.counter_amount = release; }
@@ -248,20 +270,86 @@ export async function decideReferred(requestId: string, approve: boolean, by: st
   broadcast("funds", req);
 }
 
-/** Spends from released funds: captures the hold (unused remainder returns to the company). */
+/**
+ * Spends from released funds. The balance is updated synchronously (before any await), so two
+ * taps can't draw the same pounds. The Stripe hold is captured once, for the total spent, when
+ * the funds run out; whatever is left stays released for the next payment.
+ */
 export async function spendFrom(req: FundRequest, amount: number) {
-  if (stripe && req.stripe_hold) await captureHold(req.stripe_hold, amount);
-  req.remaining = 0;
-  req.status = "spent";
+  req.remaining -= amount;
+  req.spent_total = (req.spent_total ?? 0) + amount;
+  if (req.remaining <= 0) req.status = "spent";
   funds.save(req);
   broadcast("funds", req);
+  if (req.status === "spent" && stripe && req.stripe_hold) await captureHold(req.stripe_hold, req.spent_total);
 }
 
-/** Gives back unspent funds. */
+/** Gives back unspent funds: captures what was spent (if anything) and releases the rest. */
 export async function returnFunds(req: FundRequest) {
-  if (stripe && req.stripe_hold) await cancelHold(req.stripe_hold);
+  const spent = req.spent_total ?? 0;
   req.remaining = 0;
   req.status = "spent";
   funds.save(req);
   broadcast("funds", req);
+  if (stripe && req.stripe_hold) {
+    if (spent > 0) await captureHold(req.stripe_hold, spent);
+    else await cancelHold(req.stripe_hold);
+  }
+}
+
+type Turn = z.infer<typeof Turn>;
+
+/** Fast Claude turn. Returns null on timeout, error, refusal or no key, so the caller falls back. */
+async function askClaude(caseFile: unknown, transcript: string): Promise<Turn | null> {
+  if (!agentEnabled()) return null;
+  try {
+    const response = await client.messages.parse(
+      {
+        model: CHAT_MODEL,
+        max_tokens: 800,
+        system: SYSTEM.replace("${approver}", approverName()),
+        messages: [{ role: "user", content: `<case_file>\n${JSON.stringify(caseFile, null, 2)}\n</case_file>\n\n<conversation>\n${transcript}\n</conversation>\n\nReply as Clearance.` }],
+        output_config: { effort: "low", format: zodOutputFormat(Turn) },
+      },
+      { timeout: CHAT_TIMEOUT_MS, maxRetries: 0 },
+    );
+    if (response.stop_reason === "refusal" || !response.parsed_output) return null;
+    return response.parsed_output;
+  } catch (err) {
+    console.warn("[funds] Claude unavailable, using scripted turn:", (err as Error).message);
+    return null;
+  }
+}
+
+const poundsIn = (text: string) => {
+  const m = text.match(/£\s?(\d+(?:[.,]\d{1,2})?)/) ?? text.match(/(\d+(?:\.\d{1,2})?)\s?(?:pounds|quid|gbp)/i);
+  return m ? Math.round(Number(m[1].replace(",", ".")) * 100) : null;
+};
+
+/**
+ * Scripted negotiator for when Claude is unavailable (no key, timeout, outage). It covers the
+ * demo stories and otherwise asks a sensible question. Its proposals go through the same
+ * guardrails as the model's, so outcomes stay real.
+ */
+function scriptedTurn(req: FundRequest, transcript: string): Turn {
+  const said = transcript.split("\n").filter((l) => !l.startsWith("Clearance:")).join(" ").toLowerCase();
+  const amount = poundsIn(said) ?? req.amount_requested;
+  const base = { amount_requested_pence: amount, cited_rules: [] as string[], memory_note: null };
+  if (/\b(bet|betting|casino|gambl|poker|bookie|lottery)/.test(said)) {
+    return { ...base, outcome: "deny", release_pence: null, purpose: "Gambling", category: "gambling", cited_rules: ["P1"],
+      reply: "I can't fund that: gambling is never allowed on company cards (P1). Pay for it personally." };
+  }
+  const stories = [
+    { re: /plumb|leak|flood|burst|boiler|electrician|locksmith/, category: "repairs" as const, purpose: "Emergency repair", fallback: 28_000 },
+    { re: /taxi|cab|uber|addison|ride home|late.*(train|tube)/, category: "transport" as const, purpose: "Taxi", fallback: 6_000 },
+  ];
+  const story = stories.find((s) => s.re.test(said));
+  if (story) {
+    const release = amount ?? story.fallback;
+    return { ...base, outcome: "approve", amount_requested_pence: release, release_pence: release, purpose: story.purpose, category: story.category,
+      cited_rules: ["P11", "P12"], reply: `That's a genuine emergency, so ${gbp(release)} is on your card for ${story.purpose.toLowerCase()} only. Keep the receipt.` };
+  }
+  if (!amount) return { ...base, outcome: "ask", release_pence: null, purpose: null, category: null, reply: "How much do you need, and what's it for?" };
+  return { ...base, outcome: "ask", release_pence: null, purpose: null, category: null,
+    reply: "Tell me what it's for and why it can't wait, and I'll take a look." };
 }
