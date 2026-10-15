@@ -1,0 +1,10 @@
+{
+  "name": "Clearance — company cards",
+  "short_name": "Clearance",
+  "description": "Company cards with an AI controller that clears every payment before the money moves.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0A0F",
+  "theme_color": "#0A0A0F",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
