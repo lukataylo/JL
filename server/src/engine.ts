@@ -5,7 +5,9 @@ import { broadcast } from "./events.js";
 import { categorize, gbp } from "./policy.js";
 import type { AgentVerdict, AuthRequest, DecidedBy, RuleResult, Status, Transaction } from "./types.js";
 
+/** Issuing gives ~2s to answer. A PaymentIntent hold (or local mode) can wait for a fuller review. */
 const DEADLINE_MS = Number(process.env.AGENT_DEADLINE_MS ?? 1500);
+const HOLD_DEADLINE_MS = Number(process.env.AGENT_HOLD_DEADLINE_MS ?? 10_000);
 
 const statusFor: Record<AgentVerdict["decision"], Status> = {
   approve: "approved",
@@ -20,7 +22,7 @@ const cite = (rules: RuleResult[], ...outcomes: RuleResult["outcome"][]) =>
  * Decides one authorization. Order: hard blocks → manager pre-approval → escalations →
  * agent review for flags → approve. Everything is persisted and pushed to the app.
  */
-export async function decide(req: AuthRequest): Promise<Transaction> {
+export async function decide(req: AuthRequest, opts: { realtime: boolean }): Promise<Transaction> {
   const started = performance.now();
   const { results, preApproval } = evaluate(req);
 
@@ -49,11 +51,11 @@ export async function decide(req: AuthRequest): Promise<Transaction> {
     cited = escalations;
     summary = `Held for manager approval: ${escalations[0].evidence}`;
   } else if (flags.length) {
-    agent = agentEnabled() ? await review(req, results, DEADLINE_MS) : null;
+    agent = agentEnabled() ? await review(req, results, opts.realtime ? DEADLINE_MS : HOLD_DEADLINE_MS) : null;
     if (agent) {
       status = statusFor[agent.decision];
       decidedBy = "agent";
-      cited = results.filter((r) => agent!.cited_rules.includes(r.id));
+      cited = results.filter((r) => r.outcome !== "pass" && agent!.cited_rules.includes(r.id));
       if (!cited.length) cited = flags;
       summary = agent.summary;
     } else {
@@ -66,7 +68,7 @@ export async function decide(req: AuthRequest): Promise<Transaction> {
   } else {
     status = "approved";
     cited = [];
-    summary = `Approved: within policy for ${req.employee.role}s.`;
+    summary = `Approved: within the ${req.employee.role} policy.`;
   }
 
   const tx: Transaction = {
@@ -88,6 +90,8 @@ export async function decide(req: AuthRequest): Promise<Transaction> {
     cited_rules: cited.map((r) => r.id),
     latency_ms: Math.round(performance.now() - started),
     created_at: req.at.toISOString(),
+    captured_amount: status === "approved" ? req.amount : null,
+    released_by: null,
   };
   repo.insertTransaction(tx);
 

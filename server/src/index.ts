@@ -6,7 +6,9 @@ import { db, newId, repo } from "./db.js";
 import { decide } from "./engine.js";
 import { subscribe, broadcast } from "./events.js";
 import { POLICY, RULES, gbp } from "./policy.js";
-import { CURRENCY, stripe } from "./stripe.js";
+import { CURRENCY, detectStripeMode, cancelHold, captureHold, placeHold, stripe, stripeMode } from "./stripe.js";
+import { close, release } from "./settle.js";
+import { acceptCounter, negotiate, negotiationFor } from "./negotiate.js";
 import { MODEL, agentEnabled } from "./agent.js";
 import type { AuthRequest, Transaction } from "./types.js";
 
@@ -50,7 +52,7 @@ app.post("/webhooks/stripe", express.raw({ type: "application/json" }), async (r
     mcc: auth.merchant_data.category,
     city: auth.merchant_data.city,
     at,
-  });
+  }, { realtime: true });
 
   // Respond directly to approve or decline. Escalated payments are declined at the network
   // and wait for a manager; the employee retries once approved.
@@ -63,7 +65,7 @@ app.post("/webhooks/stripe", express.raw({ type: "application/json" }), async (r
 app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
-  res.json({ stripe: Boolean(stripe), agent: agentEnabled(), model: MODEL, currency: CURRENCY });
+  res.json({ stripe: Boolean(stripe), stripeMode, agent: agentEnabled(), model: MODEL, currency: CURRENCY });
 });
 
 app.get("/api/events", (_req, res) => subscribe(res));
@@ -104,19 +106,37 @@ app.get("/api/transactions/:id", (req, res) => {
 
 app.get("/api/approvals", (_req, res) => res.json(repo.approvals()));
 
-app.post("/api/approvals/:id", (req, res) => {
+app.post("/api/approvals/:id", async (req, res) => {
   const approval = repo.approval(req.params.id);
   if (!approval || approval.status !== "pending") return res.status(409).json({ error: "not pending" });
   const { action, approver = "Priya Shah", note = null } = req.body as { action: "approve" | "reject"; approver?: string; note?: string | null };
-  repo.resolveApproval(approval.id, action === "approve" ? "approved" : "rejected", approver, note);
-  const employee = repo.employee(approval.employee_id);
-  repo.addMemory(
-    approval.employee_id,
-    `${approver} ${action === "approve" ? "approved" : "rejected"} ${gbp(approval.amount)} at ${approval.merchant} for ${employee?.name}${note ? `: "${note}"` : ""}.`,
-  );
+  const tx = repo.transaction(approval.transaction_id)!;
+  try {
+    if (action === "approve") await release(tx, approval.amount, approver, "manager", `Approved by ${approver}${note ? `: ${note}` : "."}`);
+    else await close(tx, approver, "manager", `Rejected by ${approver}${note ? `: ${note}` : "."}`);
+  } catch (err) {
+    return res.status(502).json({ error: (err as Error).message });
+  }
   const updated = repo.approval(approval.id);
   broadcast("approval", updated);
   res.json(updated);
+});
+
+app.get("/api/transactions/:id/negotiation", (req, res) => {
+  const tx = repo.transaction(req.params.id);
+  tx ? res.json(negotiationFor(tx)) : res.status(404).json({ error: "not found" });
+});
+
+app.post("/api/transactions/:id/negotiation", async (req, res) => {
+  const tx = repo.transaction(req.params.id);
+  if (!tx) return res.status(404).json({ error: "not found" });
+  if (!agentEnabled()) return res.status(503).json({ error: "Add ANTHROPIC_API_KEY to server/.env to negotiate with Clearance." });
+  try {
+    const result = req.body.accept ? await acceptCounter(tx) : await negotiate(tx, String(req.body.message ?? "").slice(0, 1000));
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
 });
 
 /**
@@ -137,10 +157,23 @@ app.post("/api/simulate", async (req, res) => {
     at.setUTCHours(hour - londonOffsetHours(at), 17, 0, 0);
   }
 
-  if (stripe && card.stripe_card_id) {
+  if (stripeMode === "payments") {
+    try {
+      const hold = await placeHold(amount, merchant, employee.name, card.last4);
+      const tx = await decide({ authorizationId: hold, card, employee, amount, currency: CURRENCY, merchant, mcc, city, at }, { realtime: false });
+      // Approved → release funds. Declined → drop the hold. Escalated → keep holding for a human.
+      if (tx.status === "approved") await captureHold(hold, amount);
+      if (tx.status === "declined") await cancelHold(hold);
+      return res.json({ transaction: tx });
+    } catch (err) {
+      return res.status(502).json({ error: (err as Error).message });
+    }
+  }
+
+  if (stripeMode === "issuing" && card.stripe_card_id) {
     pendingAt.set(card.id, at);
     try {
-      const auth = await stripe.testHelpers.issuing.authorizations.create({
+      const auth = await stripe!.testHelpers.issuing.authorizations.create({
         card: card.stripe_card_id,
         amount,
         currency: CURRENCY,
@@ -155,7 +188,7 @@ app.post("/api/simulate", async (req, res) => {
   }
 
   const request: AuthRequest = { authorizationId: newId("iauth_local"), card, employee, amount, currency: CURRENCY, merchant, mcc, city, at };
-  const tx: Transaction = await decide(request);
+  const tx: Transaction = await decide(request, { realtime: false });
   res.json({ transaction: tx });
 });
 
@@ -166,7 +199,8 @@ function londonOffsetHours(d: Date) {
 }
 
 const port = Number(process.env.PORT ?? 4242);
+await detectStripeMode();
 app.listen(port, () => {
   console.log(`Clearance API on http://localhost:${port}`);
-  console.log(`  Stripe: ${stripe ? "test mode" : "off (local simulation)"} · Agent: ${agentEnabled() ? MODEL : "off (flags escalate)"}`);
+  console.log(`  Stripe: ${stripeMode} · Agent: ${agentEnabled() ? MODEL : "off (flags escalate)"}`);
 });

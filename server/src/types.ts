@@ -48,7 +48,7 @@ export interface RuleResult {
 }
 
 export type Status = "approved" | "declined" | "escalated";
-export type DecidedBy = "rules" | "agent" | "pre_approval" | "timeout_fallback";
+export type DecidedBy = "rules" | "agent" | "pre_approval" | "timeout_fallback" | "manager" | "negotiation";
 
 export interface AgentVerdict {
   decision: "approve" | "decline" | "escalate";
@@ -76,6 +76,29 @@ export interface Transaction {
   summary: string;
   cited_rules: string[];
   latency_ms: number;
+  created_at: string;
+  /** Amount actually released to the merchant (may be lower after a negotiated counter). */
+  captured_amount: number | null;
+  released_by: string | null;
+}
+
+export type NegotiationOutcome = "ask" | "approve" | "counter" | "refer" | "deny";
+
+export interface NegotiationMessage {
+  role: "employee" | "agent";
+  text: string;
+  at: string;
+  outcome?: NegotiationOutcome;
+  counter_amount?: number | null;
+  cited_rules?: string[];
+}
+
+export interface Negotiation {
+  id: string;
+  transaction_id: string;
+  status: "open" | "approved" | "countered" | "accepted" | "referred" | "denied";
+  messages: NegotiationMessage[];
+  counter_amount: number | null;
   created_at: string;
 }
 

@@ -12,7 +12,7 @@ import type { Card, Employee } from "./types.js";
 const withStripe = process.argv.includes("--stripe");
 if (withStripe && !stripe) throw new Error("Set STRIPE_SECRET_KEY (sk_test_...) to seed Stripe.");
 
-db.exec("DELETE FROM employees; DELETE FROM cards; DELETE FROM transactions; DELETE FROM approvals; DELETE FROM memories;");
+db.exec("DELETE FROM employees; DELETE FROM cards; DELETE FROM transactions; DELETE FROM approvals; DELETE FROM memories; DELETE FROM negotiations;");
 
 const people: (Omit<Employee, "stripe_cardholder_id"> & { card: Pick<Card, "color" | "nickname"> })[] = [
   { id: "emp_maya", name: "Maya Chen", email: "maya@acme.test", role: "engineer", team: "Platform", monthly_budget: 200_000, avatar_color: "#7C5CFF", card: { color: "violet", nickname: "Platform team" } },
@@ -72,6 +72,7 @@ for (const [employeeId, merchant, mcc, amount, daysAgo] of history) {
     merchant, category: categorize(mcc), mcc, city: "London", amount, currency: CURRENCY, status: "approved",
     decided_by: "rules", rule_results: [], agent: null, summary: "Approved: within policy.", cited_rules: [],
     latency_ms: 1, created_at: new Date(Date.now() - daysAgo * 86_400_000).toISOString(),
+    captured_amount: amount, released_by: null,
   });
 }
 

@@ -1,0 +1,85 @@
+/*
+ * Clearance design tokens. Shared by every screen — change the look here.
+ * Direction: light, airy, mint-green glass. Soft gradients, big translucent letterforms,
+ * clean grotesk type, white pill buttons, generous whitespace.
+ */
+:root {
+  --font: "Inter Tight", "Inter", system-ui, -apple-system, sans-serif;
+
+  --bg: #eef4f0;
+  --bg-grad: radial-gradient(120% 70% at 85% 35%, #c9f0cf 0%, rgba(201, 240, 207, 0) 60%),
+             radial-gradient(90% 60% at 0% 0%, #dcefe6 0%, rgba(220, 239, 230, 0) 70%),
+             linear-gradient(180deg, #f3f7f5 0%, #e8f1ec 100%);
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-solid: #ffffff;
+  --surface-2: rgba(255, 255, 255, 0.5);
+  --glass-border: rgba(255, 255, 255, 0.9);
+  --line: rgba(20, 40, 30, 0.08);
+  --blur: saturate(160%) blur(18px);
+
+  --text: #0f1a14;
+  --text-2: #4a5a51;
+  --muted: #7d8c84;
+
+  --brand: #3fbf6a;
+  --brand-strong: #1f9d4f;
+  --brand-soft: #d6f5dd;
+  --brand-glow: rgba(63, 191, 106, 0.35);
+
+  --approved: #1f9d4f;   --approved-bg: #def6e5;
+  --declined: #d9434f;   --declined-bg: #fde6e8;
+  --escalated: #c98213;  --escalated-bg: #fdf0d9;
+  --agent: #5b6cff;      --agent-bg: #e8ebff;
+
+  --radius-sm: 12px;
+  --radius: 22px;
+  --radius-lg: 30px;
+  --pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(15, 26, 20, 0.04), 0 2px 8px rgba(15, 26, 20, 0.04);
+  --shadow: 0 10px 30px -12px rgba(15, 26, 20, 0.18);
+  --shadow-lg: 0 30px 60px -20px rgba(31, 157, 79, 0.35);
+
+  --ease: cubic-bezier(0.2, 0.9, 0.3, 1);
+  color-scheme: light;
+}
+
+/* ---- Extended tokens (redesign) ---- */
+:root {
+  --ink: #0f1a14;               /* dark pill buttons, primary actions */
+  --on-ink: #ffffff;
+  --on-ink-2: rgba(255, 255, 255, 0.72);
+  --glass-strong: rgba(255, 255, 255, 0.88);
+  --glass-soft: rgba(255, 255, 255, 0.38);
+  --track: rgba(15, 26, 20, 0.07);
+  --backdrop: rgba(18, 38, 28, 0.22);
+  --focus: rgba(63, 191, 106, 0.55);
+  --budget-grad: linear-gradient(90deg, #8ee3a6 0%, #3fbf6a 60%, #1f9d4f 100%);
+  --budget-warn: linear-gradient(90deg, #ffd38a 0%, #e6a23c 100%);
+  --budget-over: linear-gradient(90deg, #ff9aa3 0%, #d9434f 100%);
+
+  /* Brand letterform glass bars */
+  --bar-top: rgba(255, 255, 255, 0.95);
+  --bar-mid: rgba(214, 245, 221, 0.75);
+  --bar-bottom: rgba(63, 191, 106, 0.55);
+  --bar-edge: rgba(255, 255, 255, 0.95);
+  --bloom: rgba(98, 214, 132, 0.55);
+
+  /* Virtual card (frosted green glass) */
+  --card-grad: linear-gradient(140deg, rgba(255, 255, 255, 0.9) 0%, rgba(214, 245, 221, 0.85) 45%, rgba(126, 214, 150, 0.9) 100%);
+  --card-shine: radial-gradient(90% 70% at 100% 0%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 60%);
+  --card-shadow: 0 24px 48px -22px rgba(31, 157, 79, 0.55), 0 2px 6px rgba(15, 26, 20, 0.05);
+  --card-frozen: linear-gradient(140deg, rgba(255, 255, 255, 0.9) 0%, rgba(226, 235, 240, 0.9) 50%, rgba(178, 198, 210, 0.9) 100%);
+  --frost: #4f86a8;
+  --frost-bg: rgba(225, 239, 248, 0.7);
+
+  /* Merchant monogram tints (bg / fg) */
+  --tint-1-bg: #dff5e5; --tint-1-fg: #1f8a49;
+  --tint-2-bg: #e3ecff; --tint-2-fg: #3a5bd0;
+  --tint-3-bg: #fdebd7; --tint-3-fg: #b0641a;
+  --tint-4-bg: #f6e1f0; --tint-4-fg: #a63d84;
+  --tint-5-bg: #dff2f3; --tint-5-fg: #1d7f86;
+  --tint-6-bg: #ece6fb; --tint-6-fg: #6a48c7;
+  --tint-7-bg: #fbe4e1; --tint-7-fg: #b8483b;
+  --tint-8-bg: #eef0d8; --tint-8-fg: #6b7420;
+}

@@ -8,7 +8,7 @@ import type { AgentVerdict, AuthRequest, RuleResult } from "./types.js";
 export const MODEL = process.env.CLAUDE_MODEL ?? "claude-opus-5-5";
 export const agentEnabled = () => Boolean(process.env.ANTHROPIC_API_KEY);
 
-const client = new Anthropic();
+export const client = new Anthropic();
 
 const Verdict = z.object({
   decision: z.enum(["approve", "decline", "escalate"]),

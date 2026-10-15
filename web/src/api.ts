@@ -1,6 +1,6 @@
 export type Role = "engineer" | "sales" | "finance";
 export type Status = "approved" | "declined" | "escalated";
-export type DecidedBy = "rules" | "agent" | "pre_approval" | "timeout_fallback";
+export type DecidedBy = "rules" | "agent" | "pre_approval" | "timeout_fallback" | "manager" | "negotiation";
 
 export interface Employee {
   id: string; name: string; email: string; role: Role; team: string;
@@ -17,6 +17,19 @@ export interface Transaction {
   category: string; mcc: string; city: string | null; amount: number; currency: string; status: Status;
   decided_by: DecidedBy; rule_results: RuleResult[]; agent: AgentVerdict | null; summary: string;
   cited_rules: string[]; latency_ms: number; created_at: string;
+  /** Amount actually released (lower than `amount` after an accepted counter-offer). */
+  captured_amount: number | null; released_by: string | null;
+}
+export type NegotiationOutcome = "ask" | "approve" | "counter" | "refer" | "deny";
+export interface NegotiationMessage {
+  role: "employee" | "agent"; text: string; at: string;
+  outcome?: NegotiationOutcome; counter_amount?: number | null; cited_rules?: string[];
+}
+export interface Negotiation {
+  id: string; transaction_id: string;
+  /** open/countered = employee can keep talking; the rest are final. */
+  status: "open" | "approved" | "countered" | "accepted" | "referred" | "denied";
+  messages: NegotiationMessage[]; counter_amount: number | null; created_at: string;
 }
 export interface Approval {
   id: string; transaction_id: string; employee_id: string; merchant: string; amount: number; reason: string;
@@ -24,7 +37,7 @@ export interface Approval {
   created_at: string; resolved_at: string | null;
 }
 export interface Overview { employee: Employee; cards: Card[]; transactions: Transaction[]; monthSpent: number; limit: number }
-export interface Health { stripe: boolean; agent: boolean; model: string; currency: string }
+export interface Health { stripe: boolean; stripeMode: "issuing" | "payments" | "off"; agent: boolean; model: string; currency: string }
 export interface PolicyDoc { policy: { company: string; version: string }; rules: { id: string; title: string; text: string }[] }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -47,6 +60,12 @@ export const api = {
     call<Approval>(`/approvals/${id}`, { method: "POST", body: JSON.stringify({ action, note }) }),
   audit: () => call<Transaction[]>("/audit"),
   policy: () => call<PolicyDoc>("/policy"),
+  negotiation: (txId: string) => call<Negotiation>(`/transactions/${txId}/negotiation`),
+  /** Sends one employee message; Clearance replies (takes ~3-15s) and may settle the payment. */
+  negotiate: (txId: string, message: string) =>
+    call<{ negotiation: Negotiation; transaction: Transaction }>(`/transactions/${txId}/negotiation`, { method: "POST", body: JSON.stringify({ message }) }),
+  acceptCounter: (txId: string) =>
+    call<{ negotiation: Negotiation; transaction: Transaction }>(`/transactions/${txId}/negotiation`, { method: "POST", body: JSON.stringify({ accept: true }) }),
   simulate: (body: { cardId: string; merchant: string; mcc: string; amount: number; city?: string; hour?: number }) =>
     call<{ transaction?: Transaction }>("/simulate", { method: "POST", body: JSON.stringify(body) }),
 };
@@ -64,4 +83,6 @@ export const DECIDED_BY_LABEL: Record<DecidedBy, string> = {
   agent: "Clearance agent",
   pre_approval: "Manager pre-approval",
   timeout_fallback: "Safe default",
+  manager: "Manager",
+  negotiation: "Negotiated with Clearance",
 };

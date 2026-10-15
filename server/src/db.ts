@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
-import type { Approval, Card, Employee, Transaction } from "./types.js";
+import type { Approval, Card, Employee, Negotiation, Transaction } from "./types.js";
 
 export const db = new DatabaseSync(process.env.DB_PATH ?? "clearance.db");
 
@@ -17,7 +17,10 @@ CREATE TABLE IF NOT EXISTS transactions (
   id TEXT PRIMARY KEY, stripe_authorization_id TEXT, card_id TEXT, employee_id TEXT,
   merchant TEXT, category TEXT, mcc TEXT, city TEXT, amount INTEGER, currency TEXT,
   status TEXT, decided_by TEXT, rule_results TEXT, agent TEXT, summary TEXT,
-  cited_rules TEXT, latency_ms INTEGER, created_at TEXT
+  cited_rules TEXT, latency_ms INTEGER, created_at TEXT, captured_amount INTEGER, released_by TEXT
+);
+CREATE TABLE IF NOT EXISTS negotiations (
+  id TEXT PRIMARY KEY, transaction_id TEXT UNIQUE, status TEXT, messages TEXT, counter_amount INTEGER, created_at TEXT
 );
 CREATE TABLE IF NOT EXISTS approvals (
   id TEXT PRIMARY KEY, transaction_id TEXT, employee_id TEXT, merchant TEXT, amount INTEGER,
@@ -55,14 +58,20 @@ export const repo = {
 
   insertTransaction(t: Transaction) {
     db.prepare(
-      `INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).run(
       t.id, t.stripe_authorization_id, t.card_id, t.employee_id, t.merchant, t.category, t.mcc,
       t.city, t.amount, t.currency, t.status, t.decided_by, JSON.stringify(t.rule_results),
       t.agent ? JSON.stringify(t.agent) : null, t.summary, JSON.stringify(t.cited_rules),
-      t.latency_ms, t.created_at,
+      t.latency_ms, t.created_at, t.captured_amount, t.released_by,
     );
   },
+  setAuthorizationId: (id: string, authorizationId: string) =>
+    db.prepare("UPDATE transactions SET stripe_authorization_id = ? WHERE id = ?").run(authorizationId, id),
+  /** Final outcome after a hold is released or closed by a manager or negotiation. */
+  settleTransaction: (id: string, status: Transaction["status"], decidedBy: Transaction["decided_by"], summary: string, capturedAmount: number | null, releasedBy: string | null) =>
+    db.prepare("UPDATE transactions SET status = ?, decided_by = ?, summary = ?, captured_amount = ?, released_by = ? WHERE id = ?")
+      .run(status, decidedBy, summary, capturedAmount, releasedBy, id),
   transactionsFor: (employeeId: string, limit = 50) =>
     (db.prepare("SELECT * FROM transactions WHERE employee_id = ? ORDER BY created_at DESC LIMIT ?")
       .all(employeeId, limit) as Row[]).map(toTransaction),
@@ -91,6 +100,8 @@ export const repo = {
     );
   },
   approvals: () => db.prepare("SELECT * FROM approvals ORDER BY created_at DESC LIMIT 50").all() as unknown as Approval[],
+  pendingApprovalFor: (transactionId: string) =>
+    db.prepare("SELECT * FROM approvals WHERE transaction_id = ? AND status = 'pending'").get(transactionId) as unknown as Approval | undefined,
   approval: (id: string) => db.prepare("SELECT * FROM approvals WHERE id = ?").get(id) as unknown as Approval | undefined,
   /** An approved, unused pre-approval that covers this merchant and amount. */
   matchingPreApproval: (employeeId: string, merchant: string, amount: number) =>
@@ -101,6 +112,16 @@ export const repo = {
   resolveApproval: (id: string, status: Approval["status"], approver: string | null, note: string | null) =>
     db.prepare("UPDATE approvals SET status = ?, approver = COALESCE(?, approver), note = COALESCE(?, note), resolved_at = ? WHERE id = ?")
       .run(status, approver, note, new Date().toISOString(), id),
+
+  negotiation(transactionId: string): Negotiation | undefined {
+    const r = db.prepare("SELECT * FROM negotiations WHERE transaction_id = ?").get(transactionId) as Row | undefined;
+    return r ? { ...(r as unknown as Negotiation), messages: JSON.parse(r.messages as string) } : undefined;
+  },
+  saveNegotiation(n: Negotiation) {
+    db.prepare(
+      `INSERT INTO negotiations VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET status = excluded.status, messages = excluded.messages, counter_amount = excluded.counter_amount`,
+    ).run(n.id, n.transaction_id, n.status, JSON.stringify(n.messages), n.counter_amount, n.created_at);
+  },
 
   addMemory: (subject: string, text: string) =>
     db.prepare("INSERT INTO memories VALUES (?,?,?,?)").run(newId("mem"), subject, text, new Date().toISOString()),
