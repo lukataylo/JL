@@ -416,7 +416,7 @@ function Welcome({ employees, onChoose, error }: { employees: Employee[]; onChoo
 /* ---------- Pay sheet ---------- */
 
 type PayPreset = (typeof PRESETS)[number];
-const REVIEW_STEPS = ["Placing a Stripe test-mode hold", "Checking the spend policy", "Clearance agent reviewing", "Recording the decision"];
+const REVIEW_STEPS = ["Checking the spend policy", "Matching released funds", "Capturing in Stripe test mode", "Recording the decision"];
 
 function PaySheet({ cardId, onDone, onResult, onOpen, onNegotiate, onRequestFunds }: {
   cardId: string;
