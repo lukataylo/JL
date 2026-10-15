@@ -14,6 +14,7 @@ import { acceptCounter, negotiate, negotiationFor } from "./negotiate.js";
 import * as fundsApi from "./funds.js";
 import { MODEL, agentEnabled } from "./agent.js";
 import { seedDemo } from "./seed.js";
+import { mountVoice, voiceEnabled } from "./voice.js";
 import type { AuthRequest, Transaction } from "./types.js";
 
 const app = express();
@@ -66,10 +67,11 @@ app.post("/webhooks/stripe", express.raw({ type: "application/json" }), async (r
   });
 });
 
+mountVoice(app);
 app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
-  res.json({ stripe: Boolean(stripe), stripeMode, agent: agentEnabled(), model: MODEL, currency: CURRENCY });
+  res.json({ stripe: Boolean(stripe), stripeMode, agent: agentEnabled(), voice: voiceEnabled(), model: MODEL, currency: CURRENCY });
 });
 
 app.get("/api/events", (_req, res) => subscribe(res));

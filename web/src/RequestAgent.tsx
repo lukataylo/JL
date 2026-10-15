@@ -26,7 +26,7 @@ const isIOS = typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(naviga
 /** £280 rather than £280.00 for whole pounds. */
 const money = (p: number) => fmtMoney(p).replace(/\.00$/, "");
 
-const OPENING = "What do you need, and why now?";
+const OPENING = "Ah. A human wants money. Your card holds £0, as it should. Speak — what do you need, and why now?";
 const SUGGESTIONS = [
   "£280 emergency plumber — office leak",
   "£150 taxi home after the late client call",
@@ -74,6 +74,12 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
   const recRef = useRef<SR | null>(null);
   const finalRef = useRef("");
   const audioRef = useRef<{ stream: MediaStream; ctx: AudioContext; raf: number } | null>(null);
+  // OpenAI voice (server): MediaRecorder → /api/voice/transcribe, replies via /api/voice/speak.
+  const [serverVoice, setServerVoice] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const playerRef = useRef<HTMLAudioElement | null>(null);
+  const canRecord = typeof window !== "undefined" && "MediaRecorder" in window && !!navigator.mediaDevices?.getUserMedia;
+  const canListen = (serverVoice && canRecord) || !!SpeechRec;
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const reqRef = useRef<FundRequest | null>(null);
@@ -90,11 +96,30 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
   /* ---------- TTS ---------- */
   const stopSpeaking = useCallback(() => {
     if (canSpeak) window.speechSynthesis.cancel();
+    playerRef.current?.pause();
     setSpeaking(false);
   }, []);
 
+  const serverVoiceRef = useRef(false);
+  serverVoiceRef.current = serverVoice;
   const speak = useCallback((line: string) => {
-    if (!canSpeak || mutedRef.current || !line) return;
+    if (mutedRef.current || !line) return;
+    if (serverVoiceRef.current) {
+      fetch("/api/voice/speak", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: line }) })
+        .then((r) => (r.ok ? r.blob() : Promise.reject(new Error("speech failed"))))
+        .then((blob) => {
+          if (!mounted.current || mutedRef.current) return;
+          playerRef.current?.pause();
+          const audio = new Audio(URL.createObjectURL(blob));
+          playerRef.current = audio;
+          audio.onplay = () => mounted.current && setSpeaking(true);
+          audio.onended = audio.onpause = () => mounted.current && setSpeaking(false);
+          return audio.play();
+        })
+        .catch(() => mounted.current && setSpeaking(false));
+      return;
+    }
+    if (!canSpeak) return;
     const synth = window.speechSynthesis;
     synth.cancel();
     const u = new SpeechSynthesisUtterance(line);
@@ -123,9 +148,12 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
   useEffect(() => {
     mounted.current = true;
     if (canSpeak) window.speechSynthesis.getVoices(); // warm the voice list
+    api.health().then((h) => mounted.current && setServerVoice(Boolean((h as { voice?: boolean }).voice))).catch(() => {});
     return () => {
       mounted.current = false;
       if (canSpeak) window.speechSynthesis.cancel();
+      playerRef.current?.pause();
+      recorderRef.current?.state === "recording" && recorderRef.current.stop();
       recRef.current?.abort();
       stopMeter();
     };
@@ -249,8 +277,71 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
   }
 
   /* ---------- speech recognition ---------- */
+  /** OpenAI path: record until the employee taps again, then transcribe on the server. */
+  const startRecording = async () => {
+    primeSpeech();
+    stopSpeaking();
+    setError(null);
+    setInterim("");
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setError("Microphone blocked — allow it in your browser, or type instead.");
+      return;
+    }
+    const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((m) => MediaRecorder.isTypeSupported?.(m));
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    const chunks: Blob[] = [];
+    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    rec.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      stopMeter();
+      recorderRef.current = null;
+      if (!mounted.current) return;
+      setListening(false);
+      const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+      if (blob.size < 1500) { setInterim(""); return; }
+      setInterim("Transcribing…");
+      try {
+        const r = await fetch("/api/voice/transcribe", { method: "POST", headers: { "content-type": blob.type }, body: blob });
+        const { text: said, error: err } = (await r.json()) as { text?: string; error?: string };
+        setInterim("");
+        if (said?.trim()) void send(said.trim());
+        else setError(err ?? "Didn't catch that — try again or type it.");
+      } catch {
+        setInterim("");
+        setError("Couldn't reach voice — type instead.");
+      }
+    };
+    recorderRef.current = rec;
+    rec.start();
+    setListening(true);
+    setInterim("Listening…");
+    // Level meter from the same stream.
+    try {
+      const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AC();
+      const an = ctx.createAnalyser();
+      an.fftSize = 512;
+      ctx.createMediaStreamSource(stream).connect(an);
+      const buf = new Uint8Array(an.fftSize);
+      const tick = () => {
+        an.getByteTimeDomainData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+        setLevel(Math.min(1, Math.sqrt(sum / buf.length) * 5));
+        if (audioRef.current) audioRef.current.raf = requestAnimationFrame(tick);
+      };
+      audioRef.current = { stream: new MediaStream(), ctx, raf: requestAnimationFrame(tick) };
+    } catch { /* level is optional */ }
+    setTimeout(() => recorderRef.current === rec && rec.state === "recording" && rec.stop(), 30_000);
+  };
+
   const startListening = () => {
-    if (!SpeechRec || busy || final || listening) return;
+    if (busy || final || listening) return;
+    if (serverVoice && canRecord) { void startRecording(); return; }
+    if (!SpeechRec) return;
     primeSpeech();
     stopSpeaking();
     setError(null);
@@ -303,6 +394,7 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
   };
 
   const stopListening = () => {
+    if (recorderRef.current?.state === "recording") { recorderRef.current.stop(); return; }
     // Keep what was heard so far: stop() fires onend, which sends the transcript.
     if (!finalRef.current && interim) finalRef.current = interim;
     recRef.current?.stop();
@@ -340,11 +432,11 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
   else if (speaking) statusLine = "Clearance is speaking";
   else if (status === "countered" && counter != null) statusLine = requested ? `Offer: ${money(counter)} of ${money(requested)}` : `Offer: ${money(counter)}`;
   else if (status === "open") statusLine = "Your turn — answer Clearance";
-  else statusLine = SpeechRec ? "Tap the mic and tell Clearance" : "Tell Clearance what you need";
+  else statusLine = canListen ? "Tap the mic and tell Clearance" : "Tell Clearance what you need";
 
   const msgs: NegotiationMessage[] = req?.messages ?? [];
   // Without voice, keep the suggestions around while the request is open so the demo can't stall.
-  const showChips = (!req || (!SpeechRec && (req.status === "open"))) && !busy && !listening && !text;
+  const showChips = (!req || (!canListen && (req.status === "open"))) && !busy && !listening && !text;
 
   return (
     <div className={`ra-overlay${closing ? " is-closing" : ""}`} role="dialog" aria-modal="true" aria-label="Ask Clearance for funds">
@@ -373,7 +465,7 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
           <button
             className="ra-orbbtn"
             onClick={listening ? stopListening : startListening}
-            disabled={!SpeechRec || busy || final}
+            disabled={!canListen || busy || final}
             aria-label={listening ? "Stop listening" : "Talk to Clearance"}
           >
             <AgentOrb state={orbState} size={300} level={level} />
@@ -391,7 +483,7 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
           <div className="ra-live" aria-live="polite">{interim || "Go ahead, I'm listening…"}</div>
         ) : null}
 
-        {SpeechRec && !final && !(status === "countered" && !offerHidden) && (
+        {canListen && !final && !(status === "countered" && !offerHidden) && (
           <div className={`ra-voice${listening ? " is-on" : ""}`}>
             {listening && <Bars level={level} />}
             <button
@@ -494,7 +586,7 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
                 </div>
               )}
               <form
-                className={`ra-inputrow${SpeechRec ? " ra-inputrow--slim" : ""}`}
+                className={`ra-inputrow${canListen ? " ra-inputrow--slim" : ""}`}
                 onSubmit={(e) => { e.preventDefault(); primeSpeech(); void send(text); }}
               >
                 <div className="ra-pill">
@@ -502,7 +594,7 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
                     ref={inputRef}
                     value={text}
                     onChange={(e) => setText(e.target.value)}
-                    placeholder={SpeechRec ? (req ? "Or type a reply…" : "Or type it — e.g. £60 client lunch") : req ? "Reply to Clearance…" : "e.g. £60 client lunch today"}
+                    placeholder={canListen ? (req ? "Or type a reply…" : "Or type it — e.g. £60 client lunch") : req ? "Reply to Clearance…" : "e.g. £60 client lunch today"}
                     disabled={busy || listening}
                     enterKeyHint="send"
                     aria-label="Message Clearance"
@@ -512,7 +604,7 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
                   </button>
                 </div>
               </form>
-              {!SpeechRec && <div className="ra-hint">Voice needs Chrome or Safari — type your request instead.</div>}
+              {!canListen && <div className="ra-hint">Voice needs Chrome or Safari — type your request instead.</div>}
             </>
           )}
         </div>

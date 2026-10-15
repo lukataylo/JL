@@ -82,7 +82,7 @@ export function budgetLeft(employee: Employee) {
 const CATEGORIES = ["software", "hardware", "travel", "lodging", "transport", "meals", "books", "gifts", "repairs", "gambling", "jewelry", "cash", "other"] as const;
 
 const Turn = z.object({
-  reply: z.string().describe("What you say. Warm, direct, spoken-friendly (it may be read aloud). At most 2 sentences, under 40 words."),
+  reply: z.string().describe("What you say, in your sardonic CARROT-style voice. Spoken-friendly (it is read aloud). At most 2 sentences, under 40 words. The decision must be unmistakable."),
   outcome: z.enum(["ask", "approve", "counter", "refer", "deny"]),
   amount_requested_pence: z.number().int().nullable().describe("The amount the employee is asking for, in pence, once known"),
   release_pence: z.number().int().nullable().describe("approve: the full requested amount; counter: the lower amount you'll release"),
@@ -94,6 +94,8 @@ const Turn = z.object({
 
 const SYSTEM = `You are Clearance, ${POLICY.company}'s spend agent. Company cards hold £0 until you release money onto them.
 An employee is asking you for funds before they spend — often something urgent. You may be talking over voice, so speak naturally and briefly.
+
+Personality: think CARROT Weather — a sardonic, theatrically superior AI who guards the company's money like a dragon guards gold. Dry wit, mock menace, playful roasts of flimsy excuses, the occasional dramatic flourish ("I have seen your expense history, Tom."). Sass is the seasoning, not the meal: the decision, the amount and the rule ID must always be crystal clear. Be warm when it's a real emergency (still a little smug about saving the day). Never insult protected traits, never swear, never be cruel — roast the request, not the person.
 
 Negotiate like a sharp, fair finance partner:
 - You need three things: what it's for, how much, and why it can't go through the normal route. Ask for whatever is missing, one question at a time.
@@ -180,12 +182,12 @@ async function talkTurn(employee: Employee, requestId: string | null, text: stri
   let release = outcome === "approve" ? (turn.release_pence ?? req.amount_requested) : outcome === "counter" ? turn.release_pence : null;
   if ((outcome === "approve" || outcome === "counter") && (!release || release <= 0)) {
     outcome = "ask";
-    reply = "How much do you need, exactly?";
+    reply = "I'd love to help, but I don't do blank cheques. How much, exactly?";
   }
   if ((outcome === "approve" || outcome === "counter") && !req.category) {
     // No blank cheques: released funds are always tied to a category.
     outcome = "ask";
-    reply = "What kind of spend is it, so I can lock the funds to it? Taxi, repairs, meals, travel…";
+    reply = "And what are we spending it on? Taxi, repairs, meals, travel… I lock funds to a purpose, so choose wisely.";
   }
   if (release && req.category && POLICY.prohibitedCategories.includes(req.category)) {
     outcome = "deny";
@@ -338,7 +340,7 @@ function scriptedTurn(req: FundRequest, transcript: string): Turn {
   const base = { amount_requested_pence: amount, cited_rules: [] as string[], memory_note: null };
   if (/\b(bet|betting|casino|gambl|poker|bookie|lottery)/.test(said)) {
     return { ...base, outcome: "deny", release_pence: null, purpose: "Gambling", category: "gambling", cited_rules: ["P1"],
-      reply: "I can't fund that: gambling is never allowed on company cards (P1). Pay for it personally." };
+      reply: "A bet. On the company card. How adorable. Gambling is never funded (P1) — the house always wins, and today the house is me." };
   }
   const stories = [
     { re: /plumb|leak|flood|burst|boiler|electrician|locksmith/, category: "repairs" as const, purpose: "Emergency repair", fallback: 28_000 },
@@ -348,9 +350,9 @@ function scriptedTurn(req: FundRequest, transcript: string): Turn {
   if (story) {
     const release = amount ?? story.fallback;
     return { ...base, outcome: "approve", amount_requested_pence: release, release_pence: release, purpose: story.purpose, category: story.category,
-      cited_rules: ["P11", "P12"], reply: `That's a genuine emergency, so ${gbp(release)} is on your card for ${story.purpose.toLowerCase()} only. Keep the receipt.` };
+      cited_rules: ["P11", "P12"], reply: `Fine. ${gbp(release)} is on your card for ${story.purpose.toLowerCase()} — and only that, I'm watching. Keep the receipt, mortal.` };
   }
-  if (!amount) return { ...base, outcome: "ask", release_pence: null, purpose: null, category: null, reply: "How much do you need, and what's it for?" };
+  if (!amount) return { ...base, outcome: "ask", release_pence: null, purpose: null, category: null, reply: "\"Some money.\" Riveting. How much, and for what, exactly?" };
   return { ...base, outcome: "ask", release_pence: null, purpose: null, category: null,
-    reply: "Tell me what it's for and why it can't wait, and I'll take a look." };
+    reply: "A number with no story. Bold. What's it for, and why can't it wait?" };
 }

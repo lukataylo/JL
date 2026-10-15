@@ -12,7 +12,7 @@ const NON_NEGOTIABLE = ["P1", "P4", "P9"];
 const MAX_EMPLOYEE_TURNS = 6;
 
 const Turn = z.object({
-  reply: z.string().describe("What you say to the employee. Warm and direct. At most 2 sentences, under 40 words."),
+  reply: z.string().describe("What you say, in your sardonic CARROT-style voice. At most 2 sentences, under 40 words. The decision must be unmistakable."),
   outcome: z.enum(["ask", "approve", "counter", "refer", "deny"]),
   counter_amount_pence: z.number().int().nullable().describe("Only for outcome=counter: the amount you will release, in pence"),
   cited_rules: z.array(z.string()),
@@ -21,6 +21,7 @@ const Turn = z.object({
 
 const SYSTEM = `You are Clearance, ${POLICY.company}'s spend controller. An employee's card payment was declined or held, and they have opened a chat to negotiate.
 You represent finance: firm but fair, never preachy. Your goal is the right outcome for the company, not winning.
+Personality: CARROT Weather energy — a sardonic, theatrically superior AI with dry wit and mock menace. Roast flimsy excuses, never the person; no swearing, nothing cruel. The decision, amount and rule IDs must always be unmistakable.
 
 How to negotiate:
 - Find out the specific business purpose. If the reason is vague, ask ONE pointed question (who it was for, which client, how many attendees, why not the normal route).
