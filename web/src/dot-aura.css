@@ -600,3 +600,15 @@ body { background: var(--bg); }
   font-weight: 700; font-size: 18px; background: rgba(17, 17, 17, 0.35);
 }
 @media (max-width: 360px) { .rcard-number { font-size: 17px; } .rcard-bal { font-size: 24px; } }
+
+/* ---------- One look in every state: orange aura + orange card, even at £0 ---------- */
+.hero.hero-empty,
+.da-aura--idle {
+  --da-fg: #fff;
+  --da-fg-2: rgba(255, 255, 255, 0.72);
+  --da-tick: rgba(255, 255, 255, 0.6);
+  --da-aura: var(--aura-funded);
+  background: var(--aura-amber);
+}
+.rcard-empty { background: #FF6A1A; }
+.rcard-empty .rcard-bal { opacity: 1; }
