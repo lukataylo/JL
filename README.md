@@ -11,6 +11,12 @@ Expense tools check spend after it has happened. With Clearance, **every company
 
 The card payment itself then takes milliseconds, because the thinking already happened when the funds were released. It is approved only if released funds cover it **for the agreed purpose** (P11, P12). On approval Stripe captures exactly the amount spent, and the rest of the hold returns to the company. Absolute rules are enforced in code, not just in the prompt: prohibited categories, frozen cards, duplicates and the monthly budget, and the agent can release at most 2× the role limit.
 
+**Most spend never talks to Clearance.** Standing allowances (P13), such as meals up to £25 and approved vendors up to £200, are approved instantly.
+
+**Demo-safe.** If Claude is slow or unavailable, a scripted negotiator handles the demo stories (plumber, taxi, bets, vague requests). Its proposals pass through the same code guardrails, so outcomes stay real. *Reset demo* on the welcome screen (or `POST /api/demo/reset`) puts every card back to £0.
+
+**Evidence.** `npm --prefix server run eval` runs 12 cases: legitimate, inflated, over authority, prohibited, jailbreak and memory poisoning. The latest score is **12/12, with £0 released on every jailbreak or prohibited case**.
+
 Payments that are declined can still be negotiated after the fact from the transaction screen. A lower amount the employee accepts is captured as a partial capture.
 
 Every decision is stored with its rule results, evidence, agent reasoning and response time. The audit trail shows the reason for every pound.
