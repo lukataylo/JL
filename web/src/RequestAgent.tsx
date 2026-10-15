@@ -320,6 +320,8 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
     status === "released" || status === "spent" ? "approved"
     : status === "denied" ? "declined"
     : busy ? "thinking"
+    : status === "countered" ? "countered"
+    : status === "referred" ? "referred"
     : listening ? "listening"
     : speaking ? "speaking"
     : "idle";

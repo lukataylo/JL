@@ -1,47 +1,41 @@
 import { useEffect, useRef } from "react";
 import "./request-agent.css";
 
-export type OrbState = "idle" | "listening" | "thinking" | "speaking" | "approved" | "declined";
+export type OrbState = "idle" | "listening" | "thinking" | "speaking" | "approved" | "declined" | "countered" | "referred";
 
-type RGB = [number, number, number];
-interface Palette { hi: RGB; mid: RGB; core: RGB; deep: RGB; accent: RGB; glow: RGB }
-interface Params { speed: number; wobble: number; pulse: number; pulseFreq: number; rings: number; shimmer: number; particles: number; scale: number; talk: number }
+/**
+ * Eye shape in dot-grid units. w/h = half-size of a squircle eye, top = upper lid drop,
+ * slant = lid tilt toward the nose (+ angry, - sad), happy = carve the bottom into an arch,
+ * bottom = lower lid lift, lx/ly = gaze offset, gap = extra spread between the eyes.
+ */
+interface Eye { w: number; h: number; top: number; slant: number; happy: number; bottom: number; lx: number; ly: number; gap: number }
 
-// Aura palette (matches the Dot Aura hero): cool idle, amber→lilac thinking,
-// orange→amber approved (with a wasabi accent), red declined.
-const PALETTES: Record<OrbState, Palette> = {
-  idle:      { hi: [252, 252, 254], mid: [223, 228, 234], core: [196, 204, 220], deep: [150, 140, 190], accent: [233, 216, 240], glow: [200, 196, 230] },
-  listening: { hi: [255, 250, 244], mid: [250, 210, 160], core: [246, 178, 74],  deep: [233, 120, 60],  accent: [233, 170, 190], glow: [246, 178, 74] },
-  thinking:  { hi: [252, 248, 255], mid: [246, 200, 140], core: [214, 170, 220], deep: [130, 110, 240], accent: [185, 168, 255], glow: [185, 168, 255] },
-  speaking:  { hi: [255, 248, 240], mid: [250, 196, 130], core: [242, 140, 60],  deep: [214, 96, 40],   accent: [233, 170, 190], glow: [242, 112, 31] },
-  approved:  { hi: [255, 250, 236], mid: [246, 178, 74],  core: [242, 112, 31],  deep: [200, 80, 20],   accent: [228, 242, 90],  glow: [242, 112, 31] },
-  declined:  { hi: [255, 240, 240], mid: [245, 154, 138], core: [232, 68, 63],   deep: [168, 24, 40],   accent: [255, 150, 120], glow: [232, 68, 63] },
+const EYES: Record<OrbState, Eye> = {
+  idle:      { w: 3.6, h: 5.2, top: 0,   slant: 0,     happy: 0, bottom: 0,   lx: 0,    ly: 0,    gap: 0 },
+  listening: { w: 4.2, h: 6.2, top: 0,   slant: 0,     happy: 0, bottom: 0,   lx: 0,    ly: 0.2,  gap: 0 },
+  thinking:  { w: 3.4, h: 4.6, top: 0.6, slant: 0,     happy: 0, bottom: 0,   lx: 0.7,  ly: -0.7, gap: 0 },
+  speaking:  { w: 3.8, h: 5.4, top: 0,   slant: 0,     happy: 0, bottom: 0,   lx: 0,    ly: 0,    gap: 0 },
+  approved:  { w: 4.4, h: 5.2, top: 0,   slant: 0,     happy: 1, bottom: 0,   lx: 0,    ly: -0.2, gap: 0 },
+  declined:  { w: 4.4, h: 5.4, top: 2.2, slant: 0.55,  happy: 0, bottom: 0,   lx: 0,    ly: 0.2,  gap: 0 },
+  countered: { w: 4.4, h: 5.2, top: 2.8, slant: 0.18,  happy: 0, bottom: 1.4, lx: -0.5, ly: 0,    gap: 0 },
+  referred:  { w: 3.8, h: 4.8, top: 1.6, slant: -0.42, happy: 0, bottom: 0,   lx: 0,    ly: 0.6,  gap: 0 },
 };
+const KEYS = ["w", "h", "top", "slant", "happy", "bottom", "lx", "ly", "gap"] as const;
 
-const PARAMS: Record<OrbState, Params> = {
-  idle:      { speed: 0.55, wobble: 0.035, pulse: 0.03,  pulseFreq: 1.1, rings: 0,   shimmer: 0,   particles: 0.45, scale: 1,    talk: 0 },
-  listening: { speed: 1.0,  wobble: 0.05,  pulse: 0.015, pulseFreq: 2.2, rings: 1,   shimmer: 0,   particles: 0.6,  scale: 1.02, talk: 0 },
-  thinking:  { speed: 2.8,  wobble: 0.06,  pulse: 0.02,  pulseFreq: 3.4, rings: 0,   shimmer: 1,   particles: 1,    scale: 0.97, talk: 0 },
-  speaking:  { speed: 1.4,  wobble: 0.06,  pulse: 0.01,  pulseFreq: 1.5, rings: 0.35, shimmer: 0.2, particles: 0.7, scale: 1,    talk: 1 },
-  approved:  { speed: 0.7,  wobble: 0.025, pulse: 0.018, pulseFreq: 1.4, rings: 0,   shimmer: 0,   particles: 1,    scale: 1.04, talk: 0 },
-  declined:  { speed: 0.3,  wobble: 0.015, pulse: 0.008, pulseFreq: 0.8, rings: 0,   shimmer: 0,   particles: 0.2,  scale: 0.9,  talk: 0 },
-};
+function inEye(gx: number, gy: number, cx: number, cy: number, e: Eye, blink: number, side: 1 | -1) {
+  const h = Math.max(0.2, e.h * (1 - blink));
+  const dx = gx - cx, dy = gy - cy;
+  if (Math.pow(Math.abs(dx / e.w), 4) + Math.pow(Math.abs(dy / h), 4) > 1) return false;
+  if (gy < cy - h + e.top + e.slant * side * dx * 1.4) return false;
+  if (e.bottom > 0.05 && dy > h - e.bottom) return false;
+  if (e.happy > 0.02) {
+    const r = e.w * 1.25 * e.happy, ccy = cy + h * 0.95;
+    if (dx * dx + (gy - ccy) * (gy - ccy) < r * r) return false;
+  }
+  return true;
+}
 
-const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
-const rgba = (c: RGB, a: number) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
-const mixRGB = (a: RGB, b: RGB, k: number): RGB => [lerp(a[0], b[0], k), lerp(a[1], b[1], k), lerp(a[2], b[2], k)];
-const clonePal = (p: Palette): Palette => ({ hi: [...p.hi], mid: [...p.mid], core: [...p.core], deep: [...p.deep], accent: [...p.accent], glow: [...p.glow] });
-
-const PARTICLES = Array.from({ length: 22 }, (_, i) => ({
-  a: (i / 22) * Math.PI * 2 + Math.sin(i * 7.1) * 0.4,
-  r: 1.08 + ((i * 37) % 11) / 26,
-  s: 0.12 + ((i * 13) % 7) / 40,
-  dir: i % 3 === 0 ? -1 : 1,
-  tw: (i * 1.7) % 6.28,
-  size: 0.9 + ((i * 5) % 4) * 0.45,
-}));
-
-/** Animated Clearance agent orb — a luminous, morphing glass sphere drawn on canvas. */
+/** Clearance agent face: dot-matrix eyes on a mood aura. Same props as the old glass orb. */
 export function AgentOrb({ state, size = 160, level }: { state: OrbState; size?: number; level?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<OrbState>(state);
@@ -56,209 +50,75 @@ export function AgentOrb({ state, size = 160, level }: { state: OrbState; size?:
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const W = size * 1.8;
-    canvas.width = Math.round(W * dpr);
-    canvas.height = Math.round(W * dpr);
+    canvas.width = Math.round(size * dpr);
+    canvas.height = Math.round(size * dpr);
 
-    const pal = clonePal(PALETTES[stateRef.current]);
-    const par: Params = { ...PARAMS[stateRef.current] };
-    let t = 0;
-    let last = performance.now();
-    let lvl = 0;
-    let raf = 0;
-    const R0 = size / 2;
-    const C = W / 2;
+    // Small faces (the home button) get a coarser grid so each dot stays legible.
+    const cols = size < 90 ? 15 : 22;
+    const scale = cols / 30; // eye shapes are authored for a 30-column grid
+    const pitch = canvas.width / cols;
+    const rows = Math.floor(canvas.height / pitch);
+    const cur: Eye = { ...EYES[stateRef.current] };
+    const gaze = { x: 0, y: 0 };
+    let blink = 0, blinkAt = -1, nextBlink = performance.now() + 1800, raf = 0;
+
+    const onMove = (e: PointerEvent) => {
+      const r = canvas.getBoundingClientRect();
+      gaze.x = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (window.innerWidth * 0.4)));
+      gaze.y = Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height / 2)) / (window.innerHeight * 0.5)));
+    };
+    window.addEventListener("pointermove", onMove);
 
     const frame = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
       const st = stateRef.current;
-      const k = 1 - Math.exp(-dt * 3.2);
-      const tp = PALETTES[st];
-      (Object.keys(pal) as (keyof Palette)[]).forEach((key) => { pal[key] = mixRGB(pal[key], tp[key], k); });
-      const tpar = PARAMS[st];
-      (Object.keys(par) as (keyof Params)[]).forEach((key) => { par[key] = lerp(par[key], tpar[key], k); });
-      lvl = lerp(lvl, st === "listening" ? Math.min(1, levelRef.current) : 0, 1 - Math.exp(-dt * 12));
-      t += dt * par.speed * (reduce ? 0.2 : 1);
-      const clock = now / 1000;
       const since = (now - changedAt.current) / 1000;
+      const tg: Eye = { ...EYES[st] };
+      if (st === "thinking" && !reduce) { tg.lx = Math.sin(now / 380) * 0.8; tg.ly = -0.6 + Math.sin(now / 900) * 0.15; }
+      if (st === "idle") { tg.lx = gaze.x; tg.ly += gaze.y * 0.6; }
+      if (st === "listening") tg.h *= 1 + Math.min(1, levelRef.current) * 0.25;
+      if (st === "speaking" && !reduce) tg.ly = Math.abs(Math.sin(now / 140)) * -0.35;
+      const k = reduce ? 1 : 0.16;
+      for (const key of KEYS) cur[key] += (tg[key] - cur[key]) * k;
 
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, W, W);
-
-      // ----- scale: breathing + level + talking + transition effects
-      let scale = par.scale + (reduce ? 0 : Math.sin(clock * par.pulseFreq) * par.pulse) + lvl * 0.16;
-      if (par.talk > 0.01 && !reduce) {
-        const syll = Math.abs(Math.sin(clock * 7.3)) * 0.6 + Math.abs(Math.sin(clock * 11.1 + 1)) * 0.4;
-        scale += syll * 0.06 * par.talk;
+      if (!reduce && now > nextBlink && blinkAt < 0 && st !== "approved") blinkAt = now;
+      if (blinkAt >= 0) {
+        const b = (now - blinkAt) / 150;
+        blink = b < 1 ? b : b < 2 ? 2 - b : 0;
+        if (b >= 2) { blinkAt = -1; nextBlink = now + 2200 + Math.random() * 3200; }
       }
-      let dx = 0;
-      if (st === "approved" && since < 1.2 && !reduce) scale += Math.sin(Math.min(1, since / 0.6) * Math.PI) * 0.1;
-      if (st === "declined" && since < 0.8 && !reduce) dx = Math.sin(since * 48) * (1 - since / 0.8) * R0 * 0.09;
-      const R = R0 * scale;
-      const cx = C + dx;
-      const cy = C;
+      // Declined: a short head-shake.
+      const shake = st === "declined" && since < 0.7 && !reduce ? Math.sin(since * 40) * (1 - since / 0.7) * 1.2 : 0;
 
-      // ----- glow
-      const glow = ctx.createRadialGradient(cx, cy, R * 0.6, cx, cy, R * 1.75);
-      glow.addColorStop(0, rgba(pal.glow, 0.42 + lvl * 0.2));
-      glow.addColorStop(0.45, rgba(pal.glow, 0.14));
-      glow.addColorStop(1, rgba(pal.glow, 0));
-      ctx.fillStyle = glow;
-      ctx.fillRect(0, 0, W, W);
+      const e: Eye = { ...cur, w: cur.w * scale, h: cur.h * scale, top: cur.top * scale, bottom: cur.bottom * scale };
+      const sep = cols * 0.17 + cur.gap * scale;
+      const mid = (cols - 1) / 2 + cur.lx * 2.2 * scale + shake;
+      const cy = (rows - 1) / 2 - 0.4 * scale + cur.ly * 1.6 * scale;
+      const offX = (canvas.width - cols * pitch) / 2 + pitch / 2, offY = (canvas.height - rows * pitch) / 2 + pitch / 2;
 
-      // ----- listening / speaking rings
-      if (par.rings > 0.02) {
-        for (let i = 0; i < 3; i++) {
-          const ph = reduce ? (i + 1) / 4 : (clock * (0.55 + lvl * 0.6) + i / 3) % 1;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const on = inEye(c, r, mid - sep, cy, e, blink, 1) || inEye(c, r, mid + sep, cy, e, blink, -1);
           ctx.beginPath();
-          ctx.arc(cx, cy, R * (1.02 + ph * 0.72), 0, Math.PI * 2);
-          ctx.strokeStyle = rgba(pal.glow, (1 - ph) * 0.55 * par.rings);
-          ctx.lineWidth = 1.5 + (1 - ph) * 1.5;
-          ctx.stroke();
-        }
-      }
-
-      // ----- approved burst
-      if (st === "approved" && since < 1.6) {
-        for (let i = 0; i < 2; i++) {
-          const p = Math.min(1, Math.max(0, (since - i * 0.18) / 1.2));
-          if (p <= 0 || p >= 1) continue;
-          const e = 1 - Math.pow(1 - p, 3);
-          ctx.beginPath();
-          ctx.arc(cx, cy, R * (1 + e * 0.85), 0, Math.PI * 2);
-          ctx.strokeStyle = rgba(pal.glow, (1 - p) * 0.8);
-          ctx.lineWidth = 4 * (1 - p) + 1;
-          ctx.stroke();
-        }
-      }
-
-      // ----- body path (organic morph)
-      const N = 72;
-      ctx.beginPath();
-      for (let i = 0; i <= N; i++) {
-        const a = (i / N) * Math.PI * 2;
-        const w =
-          Math.sin(a * 2 + t * 1.3) * 0.5 +
-          Math.sin(a * 3 - t * 1.7 + 1.2) * 0.32 +
-          Math.sin(a * 5 + t * 2.3 + 2.4) * 0.18 * (1 + par.talk);
-        const r = R * (1 + w * par.wobble * (1 + lvl * 1.5));
-        const x = cx + Math.cos(a) * r;
-        const y = cy + Math.sin(a) * r;
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      }
-      ctx.closePath();
-
-      ctx.save();
-      const body = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.42, R * 0.05, cx, cy, R * 1.05);
-      body.addColorStop(0, rgba(pal.hi, 1));
-      body.addColorStop(0.32, rgba(pal.mid, 1));
-      body.addColorStop(0.72, rgba(pal.core, 1));
-      body.addColorStop(1, rgba(pal.deep, 1));
-      ctx.fillStyle = body;
-      ctx.shadowColor = rgba(pal.deep, 0.35);
-      ctx.shadowBlur = R * 0.35;
-      ctx.shadowOffsetY = R * 0.12;
-      ctx.fill();
-      ctx.shadowColor = "transparent";
-      ctx.clip();
-
-      // swirling inner blobs
-      const blobs: [RGB, number, number, number, number][] = [
-        [pal.accent, 0.62, 0.9, 0.0, 0.75],
-        [pal.deep, 0.55, -0.7, 2.1, 0.7],
-        [pal.mid, 0.5, 1.15, 4.2, 0.75],
-        [pal.core, 0.45, -1.35, 1.0, 0.5],
-        [pal.hi, 0.35, 0.8, 3.3, 0.55],
-      ];
-      for (const [col, rad, sp, ph, alpha] of blobs) {
-        const bx = cx + Math.cos(t * sp + ph) * R * 0.48;
-        const by = cy + Math.sin(t * sp * 1.3 + ph) * R * 0.42;
-        const g = ctx.createRadialGradient(bx, by, 0, bx, by, R * rad * 1.4);
-        g.addColorStop(0, rgba(col, alpha));
-        g.addColorStop(1, rgba(col, 0));
-        ctx.fillStyle = g;
-        ctx.fillRect(cx - R * 1.3, cy - R * 1.3, R * 2.6, R * 2.6);
-      }
-
-      // luminous inner core
-      ctx.globalCompositeOperation = "lighter";
-      const lum = ctx.createRadialGradient(cx + Math.sin(t) * R * 0.1, cy + R * 0.08, 0, cx, cy, R * 0.75);
-      lum.addColorStop(0, rgba(pal.accent, 0.22 + lvl * 0.2 + par.talk * 0.06));
-      lum.addColorStop(1, rgba(pal.accent, 0));
-      ctx.fillStyle = lum;
-      ctx.fillRect(cx - R * 1.3, cy - R * 1.3, R * 2.6, R * 2.6);
-      ctx.globalCompositeOperation = "source-over";
-
-      // thinking shimmer
-      if (par.shimmer > 0.02 && "createConicGradient" in ctx) {
-        const cg = ctx.createConicGradient(clock * 2.4, cx, cy);
-        const s = 0.32 * par.shimmer;
-        cg.addColorStop(0, `rgba(255,255,255,${s})`);
-        cg.addColorStop(0.12, "rgba(255,255,255,0)");
-        cg.addColorStop(0.5, `rgba(255,255,255,${s * 0.6})`);
-        cg.addColorStop(0.62, "rgba(255,255,255,0)");
-        cg.addColorStop(1, `rgba(255,255,255,${s})`);
-        ctx.fillStyle = cg;
-        ctx.fillRect(cx - R * 1.3, cy - R * 1.3, R * 2.6, R * 2.6);
-      }
-
-      // specular highlight + bottom shade
-      const spec = ctx.createRadialGradient(cx - R * 0.32, cy - R * 0.45, 0, cx - R * 0.32, cy - R * 0.45, R * 0.55);
-      spec.addColorStop(0, "rgba(255,255,255,0.85)");
-      spec.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = spec;
-      ctx.fillRect(cx - R * 1.3, cy - R * 1.3, R * 2.6, R * 2.6);
-      const shade = ctx.createRadialGradient(cx, cy + R * 0.9, 0, cx, cy + R * 0.9, R * 0.9);
-      shade.addColorStop(0, rgba(pal.deep, 0.35));
-      shade.addColorStop(1, rgba(pal.deep, 0));
-      ctx.fillStyle = shade;
-      ctx.fillRect(cx - R * 1.3, cy - R * 1.3, R * 2.6, R * 2.6);
-      ctx.restore();
-
-      // glass rim
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = "rgba(255,255,255,0.55)";
-      ctx.stroke();
-
-      // particles
-      if (par.particles > 0.02) {
-        for (const p of PARTICLES) {
-          const a = p.a + clock * p.s * p.dir * (reduce ? 0.1 : 1) * (1 + par.shimmer * 2);
-          const rr = R0 * p.r * (1 + Math.sin(clock * 0.7 + p.tw) * 0.04) * (st === "approved" && since < 1.5 ? 1 + (1 - since / 1.5) * 0.4 : 1);
-          const al = (0.35 + 0.65 * (0.5 + 0.5 * Math.sin(clock * 2 + p.tw))) * par.particles * 0.7;
-          ctx.beginPath();
-          ctx.arc(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, p.size, 0, Math.PI * 2);
-          ctx.fillStyle = rgba(mixRGB(pal.glow, [255, 255, 255], 0.35), al);
+          ctx.fillStyle = on ? "rgba(255,255,255,0.97)" : "rgba(255,255,255,0.16)";
+          ctx.arc(offX + c * pitch, offY + r * pitch, pitch * (on ? 0.4 : 0.16), 0, Math.PI * 2);
           ctx.fill();
         }
       }
-
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("pointermove", onMove); };
   }, [size]);
 
   return (
     <div className={`orb orb--${state}`} style={{ width: size, height: size }} data-state={state} aria-hidden>
-      <canvas ref={canvasRef} className="orb-canvas" style={{ width: size * 1.8, height: size * 1.8 }} />
-      {state === "approved" && (
-        <svg className="orb-mark orb-mark--check" viewBox="0 0 48 48" style={{ width: size * 0.34, height: size * 0.34 }}>
-          <path d="M12 25.5 L21 34 L37 15" />
-        </svg>
-      )}
-      {state === "declined" && (
-        <svg className="orb-mark orb-mark--x" viewBox="0 0 48 48" style={{ width: size * 0.3, height: size * 0.3 }}>
-          <path d="M14 14 L34 34" />
-          <path d="M34 14 L14 34" />
-        </svg>
-      )}
+      <span className="orb-aura" />
+      <canvas ref={canvasRef} className="orb-canvas" style={{ width: size, height: size }} />
     </div>
   );
 }
