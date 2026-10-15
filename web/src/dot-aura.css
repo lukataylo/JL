@@ -1,0 +1,480 @@
+/*
+ * Dot Aura theme layer — imported LAST (after styles.css). Re-skins existing class names with
+ * no markup changes, and styles the da-* primitives from DotAura.tsx.
+ * Fog page, flat white squircle tiles, Geist text, Doto numerals, ink pills, wasabi chips,
+ * blurred orange/amber aura behind the hero number.
+ */
+
+/* ===================== Tokens ===================== */
+:root {
+  --font: "Geist", "Inter Tight", "Inter", system-ui, -apple-system, sans-serif;
+  --font-dot: "Doto", "Geist", ui-monospace, monospace;
+
+  --bg: #ececea;
+  --bg-grad: linear-gradient(#ececea, #ececea);
+  --surface: #f8f8f7;
+  --surface-solid: #ffffff;
+  --surface-2: #f1f1ef;
+  --glass-border: transparent;
+  --line: rgba(0, 0, 0, 0.06);
+  --blur: none;
+
+  --text: #141414;
+  --text-2: #5c5c59;
+  --muted: #8f8f8c;
+
+  --ink: #141414;
+  --on-ink: #ffffff;
+  --on-ink-2: rgba(255, 255, 255, 0.62);
+  --glass-strong: #ffffff;
+  --glass-soft: #f8f8f7;
+  --track: rgba(0, 0, 0, 0.07);
+  --backdrop: rgba(20, 20, 20, 0.28);
+  --focus: rgba(242, 112, 31, 0.55);
+
+  --wasabi: #e4f25a;
+  --brand: #e4f25a;
+  --brand-strong: #141414;
+  --brand-soft: #e4f25a;
+  --brand-glow: rgba(242, 112, 31, 0.28);
+  --bloom: transparent;
+
+  --approved: #5a6e00;   --approved-bg: #e4f25a;
+  --declined: #d9433f;   --declined-bg: #ffffff;
+  --escalated: #a65a0b;  --escalated-bg: #ffe2b8;
+  --agent: #6a55e0;      --agent-bg: #eeeaff;
+
+  --radius-sm: 18px;
+  --radius: 28px;
+  --radius-lg: 36px;
+
+  --shadow-sm: none;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: none;
+
+  --funded: #ffffff;
+  --funded-glow: transparent;
+  --seg-spent: #ffffff;
+  --seg-rel: rgba(255, 255, 255, 0.35);
+  --budget-grad: linear-gradient(90deg, #f2701f, #f6b24a);
+  --cta-grad: #141414;
+
+  /* Aura stops */
+  --aura-orange: #f2701f;
+  --aura-amber: #f6b24a;
+  --aura-blush: #e9aabe;
+  --aura-lilac: #b9a8ff;
+  --aura-red: #e8443f;
+  --aura-coral: #f59a8a;
+  --aura-cool: #dfe4ea;
+  --aura-faint: #e9d8f0;
+
+  --aura-funded:
+    radial-gradient(55% 60% at 22% 28%, var(--aura-orange) 0%, transparent 72%),
+    radial-gradient(60% 65% at 78% 38%, var(--aura-amber) 0%, transparent 72%),
+    radial-gradient(70% 60% at 55% 95%, var(--aura-blush) 0%, transparent 75%),
+    linear-gradient(160deg, #f48838 0%, #f5b25a 55%, #ecb3c3 100%);
+  --aura-idle:
+    radial-gradient(60% 60% at 80% 20%, var(--aura-faint) 0%, transparent 72%),
+    radial-gradient(70% 60% at 15% 85%, #e6eaf0 0%, transparent 72%),
+    linear-gradient(160deg, #e4e8ee 0%, var(--aura-cool) 60%, #e7e0ee 100%);
+  --aura-thinking:
+    radial-gradient(55% 60% at 25% 30%, var(--aura-amber) 0%, transparent 72%),
+    radial-gradient(65% 65% at 78% 70%, var(--aura-lilac) 0%, transparent 72%),
+    linear-gradient(160deg, #f4c27a 0%, #d7b8e6 55%, var(--aura-lilac) 100%);
+  --aura-declined:
+    radial-gradient(60% 60% at 25% 30%, var(--aura-red) 0%, transparent 72%),
+    radial-gradient(65% 65% at 75% 70%, var(--aura-coral) 0%, transparent 72%),
+    linear-gradient(160deg, #e9574b 0%, var(--aura-coral) 100%);
+
+  /* Virtual card = small aura */
+  --card-grad: var(--aura-funded);
+  --card-empty: var(--aura-idle);
+  --card-shine: radial-gradient(80% 60% at 100% 0%, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 60%);
+  --card-shadow: none;
+  --card-funded-shadow: none;
+  --card-frozen: linear-gradient(160deg, #e9ebee, #d9dde2);
+  --frost: #4f6f86;
+  --frost-bg: rgba(236, 236, 234, 0.75);
+}
+
+/* ===================== Base ===================== */
+html { background: var(--bg); }
+body { background: var(--bg); font-family: var(--font); letter-spacing: -0.01em; }
+.bg-bloom { display: none !important; }
+.da-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Flat tiles: no blur, no border, no shadow */
+.glass {
+  background: var(--surface); border: 0; border-radius: var(--radius); box-shadow: none;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+
+/* ===================== Buttons ===================== */
+.btn { font-weight: 600; letter-spacing: -0.01em; }
+.btn-ink { background: var(--ink); color: var(--on-ink); box-shadow: none; }
+.btn-white { background: #fff; color: var(--text); box-shadow: none; border: 0; }
+.btn-brand { background: var(--ink); color: var(--on-ink); box-shadow: none; }
+.btn-approved { background: var(--wasabi); color: var(--ink); box-shadow: none; }
+.btn-text { color: var(--text-2); }
+.link { color: var(--text); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
+
+/* ===================== Top bar ===================== */
+.topbar::before { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.who-name { font-weight: 600; letter-spacing: -0.02em; }
+.avatar { box-shadow: none; }
+.mode {
+  background: #fff; border: 0; backdrop-filter: none; -webkit-backdrop-filter: none;
+  color: var(--text); font-weight: 500;
+}
+.mode .dot { background: var(--aura-amber); }
+.mode.on .dot { background: var(--ink); box-shadow: 0 0 0 3px var(--wasabi); }
+
+/* ===================== Aura (shared by .hero and .da-aura) ===================== */
+.hero,
+.da-aura {
+  --da-fg: #ffffff;
+  --da-fg-2: rgba(255, 255, 255, 0.78);
+  --da-tick: rgba(255, 255, 255, 0.9);
+  --da-aura: var(--aura-funded);
+  position: relative; isolation: isolate; overflow: hidden;
+  margin: 0 -12px; border-radius: 36px; min-height: 320px;
+  padding: 22px 22px 20px; color: var(--da-fg);
+  display: flex; flex-direction: column; text-align: left;
+  background: #f3a24a; /* fallback while gradient paints */
+}
+.hero::before,
+.da-aura::before {
+  content: ""; position: absolute; inset: -22%; z-index: -1; pointer-events: none;
+  background: var(--da-aura); filter: blur(22px);
+  animation: da-drift 16s ease-in-out infinite alternate;
+  transition: opacity 0.6s ease;
+}
+.hero::after,
+.da-aura::after {
+  /* faint grain / sheen so the blur reads as light, not flat colour */
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(90% 60% at 50% 0%, rgba(255, 255, 255, 0.18), transparent 70%);
+}
+@keyframes da-drift {
+  0% { transform: translate3d(-3%, -2%, 0) rotate(0deg) scale(1); }
+  50% { transform: translate3d(3%, 2%, 0) rotate(8deg) scale(1.06); }
+  100% { transform: translate3d(-2%, 3%, 0) rotate(-6deg) scale(1.02); }
+}
+
+/* Idle / empty: cool, ink text */
+.hero.hero-empty,
+.da-aura--idle {
+  --da-fg: #141414;
+  --da-fg-2: rgba(20, 20, 20, 0.55);
+  --da-tick: rgba(20, 20, 20, 0.28);
+  --da-aura: var(--aura-idle);
+  background: var(--aura-cool);
+}
+.hero.hero-funded,
+.da-aura--funded,
+.da-aura--approved { --da-aura: var(--aura-funded); }
+.da-aura--thinking { --da-aura: var(--aura-thinking); background: #e0b7b0; }
+.da-aura--thinking::before { animation-duration: 6s; }
+.da-aura--declined { --da-aura: var(--aura-declined); background: var(--aura-red); }
+
+/* The agent is the aura: while the request overlay is open, the home hero thinks */
+body:has(.ra-overlay) .hero,
+body:has(.ra-overlay) .da-aura:not(.da-aura--approved):not(.da-aura--declined) {
+  --da-fg: #fff; --da-fg-2: rgba(255, 255, 255, 0.78); --da-tick: rgba(255, 255, 255, 0.9);
+  --da-aura: var(--aura-thinking);
+}
+
+/* A .hero wrapped in <Aura> becomes plain content (the Aura paints) */
+.da-aura-body { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.da-aura .hero {
+  --da-fg: inherit; --da-fg-2: inherit; --da-tick: inherit;
+  margin: 0; padding: 0; min-height: 0; border-radius: 0; overflow: visible; background: none; flex: 1;
+  color: inherit;
+}
+.da-aura .hero::before, .da-aura .hero::after { content: none; }
+
+/* Hero content */
+.hero-label {
+  color: var(--da-fg-2); font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: -0.005em;
+}
+.hero.hero-funded .hero-label { color: var(--da-fg-2); }
+.hero-live { background: var(--da-fg); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.28); }
+.hero-amount,
+.hero .da-num,
+.da-aura .da-num {
+  display: block; font-family: var(--font-dot); font-weight: 900; font-size: 68px; line-height: 0.95;
+  letter-spacing: 0.01em; margin: 14px 0 0; color: var(--da-fg); text-shadow: none;
+  font-variant-numeric: tabular-nums;
+}
+.hero.hero-empty .hero-amount,
+.hero.hero-funded .hero-amount { color: var(--da-fg); text-shadow: none; }
+.hero-amount .pence,
+.hero.hero-funded .hero-amount .pence,
+.da-num-pence { font-size: 0.5em; color: var(--da-fg-2); letter-spacing: 0.01em; margin-left: 2px; }
+.da-num { font-family: var(--font-dot); font-weight: 900; font-variant-numeric: tabular-nums; }
+.da-num-cur { font-size: 0.72em; margin-right: 0.04em; }
+
+.hero-stats { margin-top: auto; padding-top: 20px; gap: 18px; }
+.hstat { padding: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; border-radius: 0; }
+.hstat-label { color: var(--da-fg-2); }
+.hstat-value { color: var(--da-fg); font-weight: 600; }
+.hstat-value em { color: var(--da-fg-2); }
+
+/* .seg bar → white tick ruler */
+.seg { margin-top: 14px; }
+.seg-bar {
+  position: relative; height: 26px; background: none; border-radius: 0; overflow: visible; gap: 0; align-items: flex-end;
+}
+.seg-bar::before {
+  content: ""; position: absolute; inset: auto 0 0 0; height: 14px; pointer-events: none;
+  background: repeating-linear-gradient(90deg, var(--da-tick, #fff) 0 1.5px, transparent 1.5px 9px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+}
+.seg-bar > div { border-radius: 0; }
+.seg-spent { position: relative; height: 14px !important; background: none; }
+.seg-spent::after {
+  content: ""; position: absolute; right: -1.5px; bottom: 0; width: 3px; height: 26px; border-radius: 2px;
+  background: var(--da-fg, #fff);
+}
+.seg-rel { height: 14px !important; background: color-mix(in srgb, var(--da-fg, #fff) 26%, transparent); box-shadow: none; }
+.seg-legend { justify-content: flex-start; color: var(--da-fg-2); font-size: 12px; }
+.lg-spent { background: var(--da-fg); }
+.lg-rel { background: color-mix(in srgb, var(--da-fg, #fff) 40%, transparent); }
+.lg-left { background: none; box-shadow: inset 0 0 0 1px var(--da-fg-2); }
+
+/* ===================== BudgetRuler ===================== */
+.da-ruler { margin-top: auto; padding-top: 18px; color: var(--da-fg, var(--text)); --r-tick: var(--da-tick, rgba(20, 20, 20, 0.3)); }
+.da-ruler-track { position: relative; height: 30px; }
+.da-ruler-ticks {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 14px;
+  background: repeating-linear-gradient(90deg, var(--r-tick) 0 1.5px, transparent 1.5px 9px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+}
+.da-ruler-rel {
+  position: absolute; bottom: 0; height: 14px; border-radius: 2px;
+  background: color-mix(in srgb, currentColor 24%, transparent);
+  transition: left 0.8s var(--ease), width 0.8s var(--ease);
+}
+.da-ruler-marker {
+  position: absolute; bottom: 0; width: 3px; height: 30px; margin-left: -1.5px; border-radius: 2px;
+  background: currentColor; transition: left 0.8s var(--ease);
+}
+.da-ruler--over .da-ruler-marker { box-shadow: 0 0 0 3px rgba(232, 68, 63, 0.45); }
+.da-ruler-labels {
+  display: flex; justify-content: space-between; gap: 12px; margin-top: 8px;
+  font-size: 12.5px; color: var(--da-fg-2, var(--muted)); font-variant-numeric: tabular-nums;
+}
+.da-ruler-labels b { color: var(--da-fg, var(--text)); font-weight: 600; }
+
+/* ===================== Pager ===================== */
+.da-pager { display: flex; justify-content: center; gap: 6px; margin: -4px 0 0; }
+.da-pager i { width: 6px; height: 6px; border-radius: 50%; background: rgba(20, 20, 20, 0.18); }
+.da-pager i.on { background: var(--ink); }
+
+/* ===================== GlassOrb + monograms ===================== */
+.da-orb {
+  position: relative; flex: none; display: inline-block; border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.55) 9%, rgba(255, 255, 255, 0) 30%),
+    radial-gradient(circle at 60% 70%, var(--o-fg, #f2701f) 0%, color-mix(in srgb, var(--o-fg, #f2701f) 55%, var(--o-bg, #fff)) 55%, var(--o-bg, #fff) 100%);
+  box-shadow: inset 0 -4px 10px rgba(0, 0, 0, 0.12), inset 0 2px 3px rgba(255, 255, 255, 0.7);
+}
+.da-orb .mono-badge { right: -4px; bottom: -4px; }
+/* Existing letter monograms → glossy orbs (inline tint bg/fg stay) */
+.mono { border-radius: 50%; overflow: visible; box-shadow: inset 0 -5px 12px rgba(0, 0, 0, 0.08), inset 0 2px 3px rgba(255, 255, 255, 0.85); }
+.mono::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 32%);
+}
+.mono-badge { background: #fff; border: 0; box-shadow: 0 0 0 2px var(--surface); }
+.mono-approved { background: var(--wasabi); color: var(--ink); }
+.mono-declined { background: #fff; color: var(--declined); box-shadow: 0 0 0 2px var(--surface), inset 0 0 0 1px #e1e1df; }
+.mono-escalated { background: var(--escalated-bg); color: var(--escalated); }
+.fund-icon, .ap-funds-icon { background: var(--wasabi); color: var(--ink); border-radius: 50%; }
+
+/* ===================== Request CTA ===================== */
+.request-cta { background: var(--ink); box-shadow: none; }
+.request-cta::before { background: var(--aura-orange); opacity: 0.45; }
+.request-go { background: var(--wasabi); color: var(--ink); box-shadow: none; animation: none; }
+.request-plus { box-shadow: none; }
+.request-help { color: var(--muted); }
+
+/* ===================== Virtual card (mini aura) ===================== */
+.pcard {
+  border: 0; border-radius: 30px; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+  background: var(--aura-funded); color: #fff;
+}
+.pcard-bars { display: none; }
+.pcard .pcard-name, .pcard .pcard-label, .pcard .pcard-nfc { color: rgba(255, 255, 255, 0.78); }
+.pcard-tag { background: rgba(255, 255, 255, 0.85); color: var(--ink); }
+.pcard-chip { background: linear-gradient(135deg, #fff, #f2f2f0); border: 0; box-shadow: none; }
+.pcard-bal { background: rgba(255, 255, 255, 0.92); box-shadow: none; border-radius: 16px; }
+.pcard-bal-value { font-family: var(--font-dot); font-weight: 900; letter-spacing: 0.01em; color: var(--ink); }
+.pcard.pcard-funded .pcard-bal-label, .pcard.pcard-funded .pcard-bal-value { color: var(--ink); }
+.pcard.pcard-funded:not(.frozen) { box-shadow: none; animation: none; }
+.pcard.pcard-empty:not(.frozen) { background: var(--aura-idle); color: var(--ink); box-shadow: none; }
+.pcard.pcard-empty .pcard-name, .pcard.pcard-empty .pcard-label, .pcard.pcard-empty .pcard-nfc { color: var(--text-2); }
+.pcard.frozen { background: var(--card-frozen); color: var(--ink); }
+.pcard-frozen span { background: #fff; box-shadow: none; }
+
+/* ===================== Quick actions ===================== */
+.action-icon { background: #fff; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; border-radius: 22px; }
+.action.primary .action-icon { background: var(--ink); color: var(--on-ink); box-shadow: none; }
+.action.active .action-icon { background: var(--frost-bg); color: var(--frost); }
+.action-label { color: var(--text-2); }
+.badge { background: var(--aura-orange); border-color: #fff; }
+
+/* ===================== Lists / transactions ===================== */
+.list-head h2, .page-head h1, .sheet-title { letter-spacing: -0.02em; font-weight: 600; }
+.list-head h2 { font-size: 22px; }
+.page-head h1 { font-size: 28px; }
+.txday { letter-spacing: 0.06em; font-weight: 500; }
+.txlist { gap: 8px; }
+.txlist .glass, .list.glass { border-radius: 30px; }
+.txrow { padding: 12px 18px; }
+.txrow + .txrow { border-top-color: var(--line); }
+.txrow:active { background: var(--surface-2); }
+.txrow::before { display: none; }
+.txamount { font-weight: 600; }
+.txamount-approved { color: var(--text); }
+.txstate-approved { color: var(--approved); }
+
+/* ===================== Status chips ===================== */
+.pill { font-weight: 600; }
+.pill-approved { background: var(--wasabi); color: var(--ink); }
+.pill-declined { background: #fff; color: #d9433f; box-shadow: inset 0 0 0 1px #e1e1df; }
+.pill-escalated { background: #ffe2b8; color: #8a4b05; }
+.pill-agent { background: var(--agent-bg); color: var(--agent); }
+.pill-used { background: rgba(0, 0, 0, 0.05); color: var(--text-2); }
+.outcome-pass, .st-approved, .st-used { background: var(--wasabi); color: var(--ink); }
+.outcome-block, .st-rejected { background: #fff; color: #d9433f; box-shadow: inset 0 0 0 1px #e1e1df; }
+.outcome-flag, .outcome-escalate, .st-pending { background: #ffe2b8; color: #8a4b05; }
+.rule-id { background: var(--wasabi); color: var(--ink); }
+.ap-kind { background: var(--wasabi); color: var(--ink); }
+
+/* ===================== Sheet / detail / results ===================== */
+.sheet-backdrop { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.sheet { background: var(--bg); box-shadow: none; border-radius: 36px 36px 0 0; }
+.sheet-close { background: #fff; border: 0; }
+.detail-amount, .review-amount, .fund-left-value, .approval-amount, .stat-value {
+  font-family: var(--font-dot); font-weight: 900; letter-spacing: 0.01em;
+}
+.detail-amount { font-size: 44px; }
+.fund-left-value { color: var(--ink); }
+.fund { border: 0; }
+.fund-bar i, .split-approved { background: var(--ink); }
+.fund-return { background: #fff; border: 0; }
+.funds-src { background: var(--wasabi); color: var(--ink); }
+.funds-src-icon { background: var(--ink); color: #fff; }
+.review-steps { background: var(--surface); border: 0; }
+.review-steps li.done .rs-dot { background: var(--ink); border-color: var(--ink); }
+.review-steps li.now .rs-dot { border-color: var(--aura-orange); border-top-color: transparent; }
+.review-orb span { border-color: var(--aura-orange); }
+.review-orb svg { box-shadow: none; }
+.ri-approved { background: var(--wasabi); color: var(--ink); box-shadow: 0 0 0 10px rgba(228, 242, 90, 0.35); }
+.ri-declined { background: var(--aura-red); box-shadow: 0 0 0 10px rgba(232, 68, 63, 0.14); }
+.ri-escalated { background: var(--aura-amber); box-shadow: none; }
+.result-approved h3 { color: var(--ink); }
+.result-rule { background: #fff; box-shadow: inset 0 0 0 1px #e1e1df; }
+.tl-dot { border: 0; }
+.tl-approved .tl-dot { background: var(--wasabi); color: var(--ink); }
+.agent-box { background: var(--agent-bg); }
+.b-agent { background: #fff; border: 0; }
+.b-who { color: var(--text); }
+.amount-field { background: #fff; border: 0; }
+.amount-field:focus-within { box-shadow: 0 0 0 3px var(--focus); }
+.hint { color: var(--text); }
+
+/* ===================== Tab bar — floating black pill ===================== */
+.tabbar {
+  bottom: calc(18px + env(safe-area-inset-bottom)); padding: 6px; background: var(--ink); border: 0;
+  box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.45); backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.tab { color: rgba(255, 255, 255, 0.58); font-weight: 500; }
+.tab.active { background: #fff; color: var(--ink); }
+.tab .badge { border-color: var(--ink); }
+
+/* ===================== Toast ===================== */
+.toast {
+  background: #fff; border: 0; border-radius: 28px; box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.3);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.ti-approved { background: var(--wasabi); color: var(--ink); }
+.ti-declined { background: var(--aura-red); }
+.ti-escalated { background: var(--aura-amber); }
+
+/* ===================== Welcome ===================== */
+.welcome-art { position: relative; margin: 12px -16px 0; border-radius: 36px; overflow: hidden; isolation: isolate; min-height: 260px; }
+.welcome-art::before {
+  content: ""; position: absolute; inset: -22%; z-index: -1; background: var(--aura-funded); filter: blur(22px);
+  animation: da-drift 16s ease-in-out infinite alternate;
+}
+.welcome-art > * { display: none; }
+.letterform { display: none; }
+.welcome-brand { color: var(--text); }
+.welcome h1 { font-size: 30px; letter-spacing: -0.03em; }
+.pill-btn { background: #fff; border: 0; box-shadow: none; }
+
+/* ===================== Request agent overlay ===================== */
+.ra-overlay { background: var(--bg); background-color: var(--bg); }
+.ra-bloom { background: radial-gradient(circle, rgba(246, 178, 74, 0.45) 0%, transparent 62%); filter: blur(30px); }
+.ra-bloom--thinking { background: radial-gradient(circle, rgba(246, 178, 74, 0.4) 0%, rgba(185, 168, 255, 0.35) 35%, transparent 62%); }
+.ra-bloom--approved { background: radial-gradient(circle, rgba(242, 112, 31, 0.45) 0%, rgba(233, 170, 190, 0.3) 38%, transparent 62%); }
+.ra-bloom--declined { background: radial-gradient(circle, rgba(232, 68, 63, 0.35) 0%, transparent 62%); }
+.ra-iconbtn { background: #fff; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.ra-dot { background: var(--ink); box-shadow: 0 0 0 3px var(--wasabi); }
+.ra-dot--thinking { background: var(--aura-amber); box-shadow: 0 0 0 3px rgba(185, 168, 255, 0.45); }
+.ra-dot--declined { background: var(--aura-red); box-shadow: 0 0 0 3px rgba(232, 68, 63, 0.18); }
+.ra-status--ok { color: var(--ink); }
+.ra-steps span { background: #fff; border: 0; }
+.ra-steps span.is-on { background: #fff3dc; color: #8a4b05; }
+.ra-steps span.is-done { color: var(--ink); background: var(--wasabi); }
+.ra-msg--agent .ra-bubble { background: #fff; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.ra-msg--employee .ra-bubble { background: var(--ink); color: #fff; box-shadow: none; }
+.ra-rules span { background: var(--wasabi); color: var(--ink); border: 0; }
+.ra-typing i { background: var(--aura-orange); }
+.ra-error { background: #fff; border: 0; box-shadow: inset 0 0 0 1px #e1e1df; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.ra-chip { background: #fff; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.ra-pill { background: #fff; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.ra-pill:focus-within { box-shadow: 0 0 0 3px var(--focus); }
+.ra-mic {
+  background: radial-gradient(circle at 35% 30%, #ffd59a 0%, var(--aura-amber) 40%, var(--aura-orange) 100%);
+  box-shadow: inset 0 -4px 10px rgba(0, 0, 0, 0.12), inset 0 2px 3px rgba(255, 255, 255, 0.6);
+}
+.ra-mic.is-on { background: radial-gradient(circle at 35% 30%, var(--aura-coral) 0%, var(--aura-red) 70%); }
+.ra-outcome { background: #fff; border: 0; border-radius: 30px; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.ra-outcome-amount { font-family: var(--font-dot); font-weight: 900; letter-spacing: 0.01em; color: var(--ink); font-size: 48px; }
+.ra-outcome-amount span { font-family: var(--font); }
+.ra-outcome--ok {
+  position: relative; isolation: isolate; overflow: hidden; color: #fff;
+  background: var(--aura-orange); border: 0; box-shadow: none;
+}
+.ra-outcome--ok::before {
+  content: ""; position: absolute; inset: -25%; z-index: -1; background: var(--aura-funded); filter: blur(22px);
+  animation: da-drift 16s ease-in-out infinite alternate;
+}
+.ra-outcome--ok .ra-outcome-kicker,
+.ra-outcome--ok .ra-outcome-sub,
+.ra-outcome--ok .ra-outcome-amount span { color: rgba(255, 255, 255, 0.82); }
+.ra-outcome--ok .ra-outcome-purpose,
+.ra-outcome--ok .ra-outcome-amount { color: #fff; }
+.ra-outcome--ok .ra-btn--ghost { background: rgba(255, 255, 255, 0.9); }
+.ra-outcome--bad { background: #fff; box-shadow: inset 0 0 0 1px #e1e1df; }
+.ra-outcome--warn { background: #fff3dc; }
+.ra-outcome--warn .ra-outcome-kicker { color: #8a4b05; }
+.ra-outcome--offer .ra-outcome-kicker { color: var(--ink); }
+.ra-offer-bar span { background: linear-gradient(90deg, var(--aura-orange), var(--aura-amber)); }
+.ra-btn--primary { background: var(--ink); box-shadow: none; }
+.ra-btn--ghost { background: #fff; border: 0; }
+
+/* ===================== Motion ===================== */
+@media (prefers-reduced-motion: reduce) {
+  .hero::before, .da-aura::before, .welcome-art::before, .ra-outcome--ok::before { animation: none !important; transform: none; }
+  .da-ruler-rel, .da-ruler-marker { transition: none; }
+}

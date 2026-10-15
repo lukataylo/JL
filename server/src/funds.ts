@@ -98,6 +98,7 @@ Negotiate like a sharp, fair finance partner:
   - refer: legitimate but above your authority — it goes to the Finance approver (\${approver}). Name them.
   - deny: against policy or not credible. Say what would change your mind.
 - Released funds are tied to the purpose and category you record, so set purpose and category precisely.
+- The employee may have picked a category before speaking (category_so_far in the case file). Treat it as their claim: keep it if the story fits, correct it if it doesn't.
 - Cite the policy rule IDs that drive your decision.
 
 Hard limits (code enforces these):
@@ -120,13 +121,14 @@ function recallFor(employee: Employee) {
 }
 
 /** One round of a funds request. Creates the request on the first message. */
-export async function talk(employee: Employee, requestId: string | null, text: string) {
+export async function talk(employee: Employee, requestId: string | null, text: string, pickedCategory: string | null = null) {
   const req: FundRequest = (requestId && funds.get(requestId)) || {
     id: newId("req"), employee_id: employee.id, status: "open", messages: [], purpose: null, category: null,
     amount_requested: null, counter_amount: null, amount_released: null, remaining: 0, stripe_hold: null,
     created_at: new Date().toISOString(),
   };
   if (req.status !== "open" && req.status !== "countered") throw new Error("This request is closed. Start a new one.");
+  if (req.messages.length === 0 && pickedCategory && (CATEGORIES as readonly string[]).includes(pickedCategory)) req.category = pickedCategory as Category;
 
   req.messages.push({ role: "employee", text, at: new Date().toISOString() });
   const turns = req.messages.filter((m) => m.role === "employee").length;
@@ -141,6 +143,7 @@ export async function talk(employee: Employee, requestId: string | null, text: s
     now: new Date().toLocaleString("en-GB", { timeZone: "Europe/London" }),
     memory: recallFor(employee),
     employee_messages_so_far: turns,
+    category_so_far: req.category,
   };
   const transcript = req.messages.map((m) => `${m.role === "employee" ? employee.name.split(" ")[0] : "Clearance"}: ${m.text}`).join("\n");
 

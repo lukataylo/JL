@@ -158,14 +158,14 @@ app.get("/api/requests/:id", (req, res) => {
   f ? res.json(f) : res.status(404).json({ error: "not found" });
 });
 
-/** Body: { employeeId, message, requestId? }. Omit requestId to start a new request. */
+/** Body: { employeeId, message, requestId?, category? }. Omit requestId to start a new request; category (from the picker) applies only then. */
 app.post("/api/requests", async (req, res) => {
-  const { employeeId, message, requestId = null } = req.body as { employeeId: string; message: string; requestId?: string | null };
+  const { employeeId, message, requestId = null, category = null } = req.body as { employeeId: string; message: string; requestId?: string | null; category?: string | null };
   const employee = repo.employee(employeeId);
   if (!employee) return res.status(404).json({ error: "employee not found" });
   if (!agentEnabled()) return res.status(503).json({ error: "Add ANTHROPIC_API_KEY to server/.env to talk to Clearance." });
   try {
-    res.json(await fundsApi.talk(employee, requestId, String(message ?? "").slice(0, 1000)));
+    res.json(await fundsApi.talk(employee, requestId, String(message ?? "").slice(0, 1000), category));
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }

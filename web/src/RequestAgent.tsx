@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, money as fmtMoney, type Employee, type FundRequest, type NegotiationMessage } from "./api";
 import { AgentOrb, type OrbState } from "./AgentOrb";
+import { CATEGORY_META, type Category } from "./categories";
 import "./request-agent.css";
 
 /* Minimal Web Speech API typings (not in every TS DOM lib). */
@@ -44,7 +45,16 @@ function pickVoice(): SpeechSynthesisVoice | undefined {
 }
 
 /** Full-screen "ask Clearance for funds" flow, voice or text. */
-export function RequestAgent({ employee, onClose, onChange }: { employee: Employee; onClose: () => void; onChange: (req: FundRequest) => void }) {
+export function RequestAgent({ employee, category = null, onClose, onChange }: {
+  employee: Employee;
+  /** Picked in ExpensePicker before the chat opens. Null = open-ended request. */
+  category?: Category | null;
+  onClose: () => void;
+  onChange: (req: FundRequest) => void;
+}) {
+  const meta = category ? CATEGORY_META[category] : null;
+  const opening = meta?.opening || OPENING;
+  const suggestions = meta?.suggestions.length ? meta.suggestions : SUGGESTIONS;
   const [req, setReq] = useState<FundRequest | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -148,7 +158,7 @@ export function RequestAgent({ employee, onClose, onChange }: { employee: Employ
     try {
       const cur = reqRef.current;
       const open = cur && (cur.status === "open" || cur.status === "countered");
-      const next = await api.requestFunds(employee.id, message, open ? cur.id : null);
+      const next = await api.requestFunds(employee.id, message, open ? cur.id : null, open ? null : category);
       if (!mounted.current) return;
       setReq(next);
       setOfferHidden(false);
@@ -165,7 +175,7 @@ export function RequestAgent({ employee, onClose, onChange }: { employee: Employ
         setBusy(false);
       }
     }
-  }, [employee.id, onChange, speak, stopSpeaking]);
+  }, [employee.id, category, onChange, speak, stopSpeaking]);
 
   const accept = async () => {
     if (!req || busy) return;
@@ -343,7 +353,7 @@ export function RequestAgent({ employee, onClose, onChange }: { employee: Employ
           </button>
           <div className="ra-title">
             <div className="ra-title-name">Clearance</div>
-            <div className="ra-title-sub"><i className={`ra-dot ra-dot--${orbState}`} />{released ? `${money(released)} on your card` : "Spend agent · cards start at £0"}</div>
+            <div className="ra-title-sub"><i className={`ra-dot ra-dot--${orbState}`} />{released ? `${money(released)} on your card` : meta ? `${meta.label} · cards start at £0` : "Spend agent · cards start at £0"}</div>
           </div>
           {canSpeak ? (
             <button className={`ra-iconbtn${muted ? " is-off" : ""}`} onClick={toggleMute} aria-label={muted ? "Unmute spoken replies" : "Mute spoken replies"} aria-pressed={!muted}>
@@ -376,7 +386,7 @@ export function RequestAgent({ employee, onClose, onChange }: { employee: Employ
         </section>
 
         <div className="ra-chat" ref={scrollRef}>
-          <div className="ra-msg ra-msg--agent"><div className="ra-bubble">{OPENING}</div></div>
+          <div className="ra-msg ra-msg--agent"><div className="ra-bubble">{opening}</div></div>
           {msgs.map((m, i) => (
             <div key={i} className={`ra-msg ra-msg--${m.role}`}>
               <div className="ra-bubble">{m.text}</div>
@@ -451,7 +461,7 @@ export function RequestAgent({ employee, onClose, onChange }: { employee: Employ
               {showChips && (
                 <div className="ra-chips">
                   <span className="ra-chips-label">Try</span>
-                  {SUGGESTIONS.map((s) => (
+                  {suggestions.map((s) => (
                     <button key={s} className="ra-chip" onClick={() => { primeSpeech(); void send(s); }}>{s}</button>
                   ))}
                 </div>

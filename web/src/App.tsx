@@ -4,12 +4,15 @@ import {
   type Approval, type Employee, type FundRequest, type Health, type Overview, type PolicyDoc, type Transaction,
 } from "./api";
 import {
-  ActiveFund, AnimatedMoney, ApprovalCard, Avatar, BudgetBar, FundDetail, FundRow, MerchantAvatar, PaymentCard, PRESETS, Sheet,
+  ActiveFund, ApprovalCard, Avatar, FundDetail, FundRow, MerchantAvatar, PaymentCard, PRESETS, Sheet,
   StatusPill, TransactionDetail, TransactionList,
 } from "./components";
 import { BrandMark, GlassLetterform, Icon } from "./icons";
 import { Negotiation } from "./Negotiation";
 import { RequestAgent } from "./RequestAgent";
+import { ExpensePicker } from "./ExpensePicker";
+import { Aura, BudgetRuler, DotNumber, DotPager, type AuraState } from "./DotAura";
+import type { Category } from "./categories";
 import { AgentOrb } from "./AgentOrb";
 
 type Tab = "home" | "approvals" | "audit" | "policy";
@@ -32,6 +35,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [freezing, setFreezing] = useState(false);
   const [requesting, setRequesting] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [reqCategory, setReqCategory] = useState<Category | null>(null);
   const [openReq, setOpenReq] = useState<FundRequest | null>(null);
   const payingRef = useRef(false);
   payingRef.current = paying;
@@ -92,7 +97,7 @@ export default function App() {
   }, [toast]);
 
   const choose = (id: string) => { setEmployeeId(id); setTab("home"); };
-  const signOut = () => { setEmployeeId(null); setOpen(null); setPaying(false); setRequesting(false); setOpenReq(null); };
+  const signOut = () => { setEmployeeId(null); setOpen(null); setPaying(false); setRequesting(false); setPicking(false); setOpenReq(null); };
 
   if (!employeeId) {
     return <Welcome employees={employees} onChoose={choose} error={error} />;
@@ -116,10 +121,16 @@ export default function App() {
   const budgetLeft = overview.budgetLeft ?? Math.max(0, employee.monthly_budget - monthSpent);
   const card = cards[0];
   const funded = available > 0;
+  // The aura is the agent: it thinks while a request is open and flashes the last decision.
+  const heroState: AuraState = requesting ? "thinking"
+    : toast?.status === "approved" ? "approved"
+    : toast?.status === "declined" ? "declined"
+    : funded ? "funded" : "idle";
   const myRequests = pending.filter((a) => a.employee_id === employee.id).length;
   const activeFunds = requests.filter((r) => r.status === "released" && r.remaining > 0);
   const pastFunds = requests.filter((r) => !activeFunds.includes(r)).slice(0, 5);
-  const startRequest = () => { setOpen(null); setPaying(false); setOpenReq(null); setRequesting(true); };
+  const startRequest = () => { setOpen(null); setPaying(false); setOpenReq(null); setPicking(true); };
+  const beginChat = (category: Category | null) => { setPicking(false); setReqCategory(category); setRequesting(true); };
   const returnFunds = async (id: string) => {
     try { const r = await api.returnFunds(id); setOpenReq((cur) => (cur && cur.id === id ? r : cur)); await refresh(); }
     catch (e) { setError((e as Error).message); }
@@ -170,24 +181,25 @@ export default function App() {
       <main className="content">
         {tab === "home" && (
           <div className="stack">
-            <section className={`hero ${funded ? "hero-funded" : "hero-empty"}`}>
+            <Aura state={heroState} className={`hero ${funded ? "hero-funded" : "hero-empty"}`}>
               <div className="hero-label">
                 {funded ? <span className="hero-live" /> : <Icon name="lock" size={13} strokeWidth={2.2} />}
                 Available on card
               </div>
-              <AnimatedMoney value={available} className="hero-amount" />
-              <div className="hero-stats">
-                <div className="hstat">
-                  <span className="hstat-label">Spent in {new Date().toLocaleDateString("en-GB", { month: "long" })}</span>
-                  <span className="hstat-value">{money(monthSpent)}</span>
-                </div>
-                <div className="hstat">
-                  <span className="hstat-label">Budget left</span>
-                  <span className="hstat-value">{money(budgetLeft)} <em>of {money(employee.monthly_budget)}</em></span>
-                </div>
+              <DotNumber value={available} className="hero-amount" />
+              <BudgetRuler budget={employee.monthly_budget} spent={monthSpent} released={available} />
+            </Aura>
+            <DotPager />
+            <div className="hero-stats">
+              <div className="hstat">
+                <span className="hstat-label">Spent in {new Date().toLocaleDateString("en-GB", { month: "long" })}</span>
+                <span className="hstat-value">{money(monthSpent)}</span>
               </div>
-              <BudgetBar budget={employee.monthly_budget} spent={monthSpent} released={available} />
-            </section>
+              <div className="hstat">
+                <span className="hstat-label">Budget left</span>
+                <span className="hstat-value">{money(budgetLeft)} <em>of {money(employee.monthly_budget)}</em></span>
+              </div>
+            </div>
 
             <div className="request-wrap">
               <button className="request-cta" onClick={startRequest} disabled={card?.status === "frozen"}>
@@ -332,9 +344,22 @@ export default function App() {
         )}
       </Sheet>
 
+      {picking && (
+        <ExpensePicker
+          employee={employee}
+          policy={policy}
+          transactions={transactions}
+          budgetLeft={budgetLeft}
+          onPick={beginChat}
+          onSkip={() => beginChat(null)}
+          onClose={() => setPicking(false)}
+        />
+      )}
+
       {requesting && (
         <RequestAgent
           employee={employee}
+          category={reqCategory}
           onClose={() => { setRequesting(false); refresh(); }}
           onChange={() => { refresh(); }}
         />

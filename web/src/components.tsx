@@ -1,3 +1,4 @@
+import { GlassOrb } from "./DotAura";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   DECIDED_BY_LABEL, money,
@@ -26,14 +27,12 @@ export function MerchantAvatar({ merchant, category, status, size = 44 }: {
   merchant: string; category: string; status?: Transaction["status"]; size?: number;
 }) {
   const tint = (hash(merchant) % 8) + 1;
-  const letters = merchant.replace(/[^\p{L}\p{N} ]/gu, "").split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
   return (
-    <div className="mono" style={{ width: size, height: size, fontSize: size * 0.34, background: `var(--tint-${tint}-bg)`, color: `var(--tint-${tint}-fg)` }}>
-      {letters.slice(0, size > 50 ? 2 : 2)}
+    <GlassOrb tint={tint} size={size} label={merchant} className="mono">
       <span className={`mono-badge ${status ? `mono-${status}` : ""}`}>
         <Icon name={status === "declined" ? "x" : status === "escalated" ? "clock" : status === "approved" ? "check" : category} size={11} strokeWidth={status === "approved" ? 2.8 : 2.2} />
       </span>
-    </div>
+    </GlassOrb>
   );
 }
 
@@ -386,54 +385,6 @@ export function ApprovalCard({ approval, who, onResolve }: {
             : { pending: "Waiting for Finance", approved: `Approved by ${approval.approver} · retry the payment`, rejected: `Rejected by ${approval.approver}`, used: "Approved and used" }[approval.status]}
         </div>
       )}
-    </div>
-  );
-}
-
-/* ---------- Money motion ---------- */
-
-/** Counts up/down to `value` (pence) whenever it changes. */
-export function AnimatedMoney({ value, className }: { value: number; className?: string }) {
-  const [shown, setShown] = useState(value);
-  const from = useRef(value);
-  useEffect(() => {
-    const start = from.current;
-    if (start === value) return;
-    const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) { from.current = value; setShown(value); return; }
-    const t0 = performance.now();
-    const dur = 1100;
-    let raf = 0;
-    const tick = (now: number) => {
-      const k = Math.min(1, (now - t0) / dur);
-      const e = 1 - Math.pow(1 - k, 3);
-      const v = Math.round(start + (value - start) * e);
-      from.current = v;
-      setShown(v);
-      if (k < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [value]);
-  const [pounds, pence] = money(shown).split(".");
-  return <span className={className}>{pounds}<span className="pence">.{pence}</span></span>;
-}
-
-/* ---------- Budget bar (spent / released / left) ---------- */
-
-export function BudgetBar({ budget, spent, released: rel }: { budget: number; spent: number; released: number }) {
-  const pct = (n: number) => `${Math.max(0, Math.min(100, (n / Math.max(1, budget)) * 100))}%`;
-  return (
-    <div className="seg">
-      <div className="seg-bar" role="img" aria-label={`${money(spent)} spent, ${money(rel)} released, of ${money(budget)}`}>
-        <div className="seg-spent" style={{ width: pct(spent) }} />
-        <div className="seg-rel" style={{ width: pct(rel) }} />
-      </div>
-      <div className="seg-legend">
-        <span><i className="lg-spent" />Spent</span>
-        <span><i className="lg-rel" />On card</span>
-        <span><i className="lg-left" />Left</span>
-      </div>
     </div>
   );
 }

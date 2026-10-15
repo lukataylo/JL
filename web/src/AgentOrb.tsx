@@ -7,13 +7,15 @@ type RGB = [number, number, number];
 interface Palette { hi: RGB; mid: RGB; core: RGB; deep: RGB; accent: RGB; glow: RGB }
 interface Params { speed: number; wobble: number; pulse: number; pulseFreq: number; rings: number; shimmer: number; particles: number; scale: number; talk: number }
 
+// Aura palette (matches the Dot Aura hero): cool idle, amber→lilac thinking,
+// orange→amber approved (with a wasabi accent), red declined.
 const PALETTES: Record<OrbState, Palette> = {
-  idle:      { hi: [240, 255, 244], mid: [150, 230, 172], core: [63, 191, 106],  deep: [24, 140, 72],  accent: [200, 246, 150], glow: [63, 191, 106] },
-  listening: { hi: [236, 255, 248], mid: [134, 239, 190], core: [40, 205, 140],  deep: [12, 140, 100], accent: [110, 225, 245], glow: [40, 205, 150] },
-  thinking:  { hi: [236, 244, 255], mid: [120, 214, 228], core: [56, 170, 200],  deep: [72, 70, 210],  accent: [150, 130, 255], glow: [90, 120, 245] },
-  speaking:  { hi: [240, 255, 246], mid: [160, 240, 200], core: [48, 196, 128],  deep: [14, 140, 120], accent: [196, 242, 110], glow: [52, 199, 128] },
-  approved:  { hi: [240, 255, 244], mid: [120, 236, 160], core: [30, 200, 90],   deep: [16, 128, 58],  accent: [190, 250, 120], glow: [34, 210, 96] },
-  declined:  { hi: [255, 240, 240], mid: [252, 160, 160], core: [232, 68, 72],   deep: [168, 24, 40],  accent: [255, 150, 90],  glow: [235, 70, 75] },
+  idle:      { hi: [252, 252, 254], mid: [223, 228, 234], core: [196, 204, 220], deep: [150, 140, 190], accent: [233, 216, 240], glow: [200, 196, 230] },
+  listening: { hi: [255, 250, 244], mid: [250, 210, 160], core: [246, 178, 74],  deep: [233, 120, 60],  accent: [233, 170, 190], glow: [246, 178, 74] },
+  thinking:  { hi: [252, 248, 255], mid: [246, 200, 140], core: [214, 170, 220], deep: [130, 110, 240], accent: [185, 168, 255], glow: [185, 168, 255] },
+  speaking:  { hi: [255, 248, 240], mid: [250, 196, 130], core: [242, 140, 60],  deep: [214, 96, 40],   accent: [233, 170, 190], glow: [242, 112, 31] },
+  approved:  { hi: [255, 250, 236], mid: [246, 178, 74],  core: [242, 112, 31],  deep: [200, 80, 20],   accent: [228, 242, 90],  glow: [242, 112, 31] },
+  declined:  { hi: [255, 240, 240], mid: [245, 154, 138], core: [232, 68, 63],   deep: [168, 24, 40],   accent: [255, 150, 120], glow: [232, 68, 63] },
 };
 
 const PARAMS: Record<OrbState, Params> = {

@@ -1,0 +1,191 @@
+/*
+ * Expense type picker: arc dial shown before a funds negotiation. Classes prefixed ep-.
+ * Follows docs/dot-aura-ui.md: fog page, ink ruler ticks, glossy orbs, flat white tile,
+ * Doto only for the budget number, ink pill CTA, wasabi / amber / red chips. No mint, no glass blur.
+ */
+
+.ep-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: var(--bg, #ececea);
+  color: var(--text);
+  font-family: var(--font);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  animation: ep-up 0.42s var(--ease) both;
+}
+.ep-overlay.is-closing { animation: ep-down 0.22s ease-in both; }
+@keyframes ep-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes ep-down { to { transform: translateY(100%); opacity: 0.6; } }
+
+.ep-shell {
+  position: relative;
+  height: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top, 0px) 0 calc(env(safe-area-inset-bottom, 0px) + 12px);
+}
+
+/* ---------- Header ---------- */
+.ep-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 4px;
+}
+.ep-iconbtn {
+  width: 42px; height: 42px; flex: none;
+  display: grid; place-items: center;
+  border: 0; border-radius: 50%;
+  background: #fff; color: var(--text);
+  cursor: pointer;
+}
+.ep-title { flex: 1; min-width: 0; }
+.ep-title-name { font-size: 25px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
+.ep-title-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.ep-skip {
+  border: 0; border-radius: 999px;
+  background: #fff; color: var(--text);
+  font: inherit; font-size: 14px; font-weight: 600;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+/* ---------- Dial ---------- */
+.ep-dial {
+  position: relative;
+  flex: 1;
+  min-height: 300px;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+}
+.ep-dial:active { cursor: grabbing; }
+.ep-dial:focus-visible .ep-notch { box-shadow: 0 0 0 5px var(--wasabi, #e4f25a), 0 0 0 7px var(--ink); }
+.ep-arc {
+  position: absolute; inset: 0;
+  transform-origin: -400px 50%;
+  animation: ep-swing 0.6s cubic-bezier(0.34, 1.4, 0.5, 1) 0.08s both;
+}
+@keyframes ep-swing { from { opacity: 0; transform: translateX(-50px) rotate(-8deg); } }
+
+.ep-tick, .ep-label, .ep-icon {
+  position: absolute; left: 0; top: 0;
+  transform-origin: 0 0;
+  will-change: transform, opacity;
+}
+.ep-tick {
+  width: 26px; height: 1.5px; border-radius: 1px;
+  background: rgba(20, 20, 20, 0.28);
+}
+.ep-tick.is-major { width: 42px; background: var(--ink); }
+
+.ep-label {
+  font-size: 12px; font-weight: 600;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  padding-right: 4px;
+  pointer-events: none;
+}
+.ep-label.is-cur { color: var(--text); }
+.ep-label.is-locked { color: #c4c4c0; }
+
+.ep-icon {
+  width: 60px; height: 60px; padding: 0;
+  border: 0; background: none; border-radius: 50%;
+  cursor: pointer;
+}
+.ep-orb {
+  display: grid !important; place-items: center;
+  color: #fff;
+  transition: box-shadow 0.25s;
+}
+.ep-orb svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2)); }
+.ep-icon.is-cur .ep-orb {
+  box-shadow: inset 0 -4px 10px rgba(0, 0, 0, 0.12), inset 0 2px 3px rgba(255, 255, 255, 0.7), 0 0 0 4px #fff, 0 0 0 6px var(--ink);
+}
+.ep-icon.is-locked .ep-orb { filter: grayscale(1); opacity: 0.55; }
+.ep-lock {
+  position: absolute; right: -3px; bottom: -3px;
+  width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: #fff; color: var(--declined);
+  box-shadow: inset 0 0 0 1px #e1e1df;
+}
+
+.ep-notch {
+  position: absolute;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 0 5px var(--wasabi, #e4f25a);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: ep-fade 0.4s ease 0.35s both;
+}
+@keyframes ep-fade { from { opacity: 0; } }
+
+/* ---------- Readout tile ---------- */
+.ep-readout {
+  margin: 0 8px;
+  padding: 18px 18px 14px;
+  border-radius: 30px;
+  background: var(--surface, #f8f8f7);
+  display: grid;
+  gap: 12px;
+  animation: ep-in 0.3s var(--ease) both;
+}
+@keyframes ep-in { from { opacity: 0; transform: translateY(6px); } }
+.ep-ro-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ep-ro-orb { display: grid !important; }
+.ep-ro-name { margin: 0; font-size: 27px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; flex: 1; min-width: 0; }
+
+.ep-pill { font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px; white-space: nowrap; }
+.ep-pill--ok { background: var(--wasabi, #e4f25a); color: var(--ink); }
+.ep-pill--reason { background: var(--escalated-bg); color: var(--escalated); }
+.ep-pill--blocked { background: #fff; color: var(--declined); box-shadow: inset 0 0 0 1px #e1e1df; }
+
+.ep-left { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.ep-left-num {
+  font-family: var(--font-dot, var(--font));
+  font-weight: 900;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.ep-left-label { font-size: 13px; color: var(--muted); }
+
+.ep-stats { display: flex; gap: 8px; flex-wrap: wrap; }
+.ep-stats div {
+  flex: 1 1 120px;
+  display: grid; gap: 2px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: #fff;
+}
+.ep-stats span { font-size: 12px; color: var(--muted); }
+.ep-stats b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.ep-hint { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--text-2); }
+
+.ep-cta {
+  height: 52px;
+  border: 0; border-radius: 999px;
+  background: var(--ink); color: var(--on-ink);
+  font: inherit; font-size: 15px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  cursor: pointer;
+  transition: transform 0.15s var(--ease);
+}
+.ep-cta:active { transform: scale(0.98); }
+.ep-cta:disabled { background: #fff; color: var(--muted); cursor: not-allowed; box-shadow: inset 0 0 0 1px #e1e1df; }
+.ep-iconbtn:focus-visible, .ep-skip:focus-visible, .ep-cta:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ep-overlay, .ep-overlay.is-closing, .ep-arc, .ep-notch, .ep-readout { animation: none; }
+}
