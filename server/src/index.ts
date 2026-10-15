@@ -1,14 +1,17 @@
 import "dotenv/config";
 import express from "express";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import cors from "cors";
 import type Stripe from "stripe";
 import { db, newId, repo } from "./db.js";
 import { decide } from "./engine.js";
 import { subscribe, broadcast } from "./events.js";
 import { POLICY, RULES, gbp } from "./policy.js";
-import { CURRENCY, detectStripeMode, cancelHold, captureHold, placeHold, stripe, stripeMode } from "./stripe.js";
+import { CURRENCY, detectStripeMode, captureHold, placeHold, stripe, stripeMode } from "./stripe.js";
 import { close, release } from "./settle.js";
 import { acceptCounter, negotiate, negotiationFor } from "./negotiate.js";
+import * as fundsApi from "./funds.js";
 import { MODEL, agentEnabled } from "./agent.js";
 import type { AuthRequest, Transaction } from "./types.js";
 
@@ -52,7 +55,7 @@ app.post("/webhooks/stripe", express.raw({ type: "application/json" }), async (r
     mcc: auth.merchant_data.category,
     city: auth.merchant_data.city,
     at,
-  }, { realtime: true });
+  });
 
   // Respond directly to approve or decline. Escalated payments are declined at the network
   // and wait for a manager; the employee retries once approved.
@@ -80,6 +83,9 @@ app.get("/api/employees/:id/overview", (req, res) => {
     cards: repo.cardsFor(employee.id),
     transactions: repo.transactionsFor(employee.id),
     monthSpent: repo.monthSpent(employee.id, new Date()),
+    available: fundsApi.funds.available(employee.id),
+    budgetLeft: fundsApi.budgetLeft(employee),
+    requests: fundsApi.funds.forEmployee(employee.id),
     limit: POLICY.roles[employee.role].perTxnLimit,
   });
 });
@@ -110,6 +116,13 @@ app.post("/api/approvals/:id", async (req, res) => {
   const approval = repo.approval(req.params.id);
   if (!approval || approval.status !== "pending") return res.status(409).json({ error: "not pending" });
   const { action, approver = "Priya Shah", note = null } = req.body as { action: "approve" | "reject"; approver?: string; note?: string | null };
+  if (approval.transaction_id.startsWith("req_")) {
+    repo.resolveApproval(approval.id, action === "approve" ? "used" : "rejected", approver, note);
+    await fundsApi.decideReferred(approval.transaction_id, action === "approve", approver, approval.amount);
+    const done = repo.approval(approval.id);
+    broadcast("approval", done);
+    return res.json(done);
+  }
   const tx = repo.transaction(approval.transaction_id)!;
   try {
     if (action === "approve") await release(tx, approval.amount, approver, "manager", `Approved by ${approver}${note ? `: ${note}` : "."}`);
@@ -139,6 +152,40 @@ app.post("/api/transactions/:id/negotiation", async (req, res) => {
   }
 });
 
+// --- Funds requests: negotiate with Clearance before spending ----------------------------
+app.get("/api/requests/:id", (req, res) => {
+  const f = fundsApi.funds.get(req.params.id);
+  f ? res.json(f) : res.status(404).json({ error: "not found" });
+});
+
+/** Body: { employeeId, message, requestId? }. Omit requestId to start a new request. */
+app.post("/api/requests", async (req, res) => {
+  const { employeeId, message, requestId = null } = req.body as { employeeId: string; message: string; requestId?: string | null };
+  const employee = repo.employee(employeeId);
+  if (!employee) return res.status(404).json({ error: "employee not found" });
+  if (!agentEnabled()) return res.status(503).json({ error: "Add ANTHROPIC_API_KEY to server/.env to talk to Clearance." });
+  try {
+    res.json(await fundsApi.talk(employee, requestId, String(message ?? "").slice(0, 1000)));
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
+
+app.post("/api/requests/:id/accept", async (req, res) => {
+  try {
+    res.json(await fundsApi.acceptCounter(req.params.id));
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
+
+app.post("/api/requests/:id/return", async (req, res) => {
+  const f = fundsApi.funds.get(req.params.id);
+  if (!f || f.status !== "released") return res.status(409).json({ error: "nothing to return" });
+  await fundsApi.returnFunds(f);
+  res.json(fundsApi.funds.get(f.id));
+});
+
 /**
  * Taps a card. With Stripe configured this creates a real test-mode authorization, which
  * Stripe sends back through the webhook above. Without Stripe it decides locally.
@@ -159,12 +206,15 @@ app.post("/api/simulate", async (req, res) => {
 
   if (stripeMode === "payments") {
     try {
-      const hold = await placeHold(amount, merchant, employee.name, card.last4);
-      const tx = await decide({ authorizationId: hold, card, employee, amount, currency: CURRENCY, merchant, mcc, city, at }, { realtime: false });
-      // Approved → release funds. Declined → drop the hold. Escalated → keep holding for a human.
-      if (tx.status === "approved") await captureHold(hold, amount);
-      if (tx.status === "declined") await cancelHold(hold);
-      return res.json({ transaction: tx });
+      const tx = await decide({ authorizationId: newId("pending"), card, employee, amount, currency: CURRENCY, merchant, mcc, city, at });
+      // Released funds are already a Stripe hold (captured inside decide). A manager pre-approval
+      // charges directly. A decline moves no money.
+      if (tx.status === "approved" && tx.decided_by !== "allowance") {
+        const pi = await placeHold(amount, merchant, employee.name, card.last4);
+        await captureHold(pi, amount);
+        repo.setAuthorizationId(tx.id, pi);
+      }
+      return res.json({ transaction: repo.transaction(tx.id) });
     } catch (err) {
       return res.status(502).json({ error: (err as Error).message });
     }
@@ -188,7 +238,7 @@ app.post("/api/simulate", async (req, res) => {
   }
 
   const request: AuthRequest = { authorizationId: newId("iauth_local"), card, employee, amount, currency: CURRENCY, merchant, mcc, city, at };
-  const tx: Transaction = await decide(request, { realtime: false });
+  const tx: Transaction = await decide(request);
   res.json({ transaction: tx });
 });
 
@@ -198,8 +248,16 @@ function londonOffsetHours(d: Date) {
   return Math.round((london.getTime() - utc.getTime()) / 3_600_000);
 }
 
+// Production: serve the built PWA from the same origin as the API.
+const webDist = fileURLToPath(new URL("../../web/dist", import.meta.url));
+if (existsSync(webDist)) {
+  app.use(express.static(webDist));
+  app.get(/^\/(?!api|webhooks).*/, (_req, res) => res.sendFile(`${webDist}/index.html`));
+}
+
 const port = Number(process.env.PORT ?? 4242);
 await detectStripeMode();
+if (repo.employees().length === 0) await import("./seed.js");
 app.listen(port, () => {
   console.log(`Clearance API on http://localhost:${port}`);
   console.log(`  Stripe: ${stripeMode} · Agent: ${agentEnabled() ? MODEL : "off (flags escalate)"}`);

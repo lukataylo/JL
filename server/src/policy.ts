@@ -33,6 +33,8 @@ export const RULES = [
   { id: "P8", title: "New merchants", text: "First-time merchants over £100 that are not approved vendors are reviewed." },
   { id: "P9", title: "Frozen cards", text: "Frozen cards decline every payment." },
   { id: "P10", title: "Manager pre-approval", text: "A manager's approval for a merchant and amount lets one matching payment through." },
+  { id: "P11", title: "Funds first", text: "Cards hold £0. Spending needs funds released by Clearance or Finance for that purpose first." },
+  { id: "P12", title: "Agreed purpose", text: "Released funds may only be spent in the category they were released for." },
 ] as const;
 
 export type RuleId = (typeof RULES)[number]["id"];
@@ -49,7 +51,8 @@ export function categorize(mcc: string): Category {
   if (/airline|air_carrier|railway|travel_agencies|bus_lines/.test(m)) return "travel";
   if (/hotel|motel|lodging|resort/.test(m)) return "lodging";
   if (/taxi|limousine|transportation|parking|car_rental/.test(m)) return "transport";
-  if (/restaurant|eating|fast_food|caterer|bakeries|drinking/.test(m)) return "meals";
+  if (/plumb|contractor|electrical|heating|roofing|carpentry|repair|locksmith|glass|cleaning/.test(m)) return "repairs";
+  if (/restaurant|eating_places|fast_food|caterer|bakeries|drinking/.test(m)) return "meals";
   if (/book/.test(m)) return "books";
   if (/gift|florist|card_shops/.test(m)) return "gifts";
   return "other";

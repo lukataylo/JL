@@ -1,79 +1,69 @@
 import { newId, repo } from "./db.js";
 import { evaluate } from "./rules.js";
-import { agentEnabled, review } from "./agent.js";
+import { funds, spendFrom } from "./funds.js";
 import { broadcast } from "./events.js";
 import { categorize, gbp } from "./policy.js";
-import type { AgentVerdict, AuthRequest, DecidedBy, RuleResult, Status, Transaction } from "./types.js";
-
-/** Issuing gives ~2s to answer. A PaymentIntent hold (or local mode) can wait for a fuller review. */
-const DEADLINE_MS = Number(process.env.AGENT_DEADLINE_MS ?? 1500);
-const HOLD_DEADLINE_MS = Number(process.env.AGENT_HOLD_DEADLINE_MS ?? 10_000);
-
-const statusFor: Record<AgentVerdict["decision"], Status> = {
-  approve: "approved",
-  decline: "declined",
-  escalate: "escalated",
-};
+import type { AuthRequest, DecidedBy, RuleResult, Status, Transaction } from "./types.js";
 
 const cite = (rules: RuleResult[], ...outcomes: RuleResult["outcome"][]) =>
   rules.filter((r) => outcomes.includes(r.outcome));
 
 /**
- * Decides one authorization. Order: hard blocks → manager pre-approval → escalations →
- * agent review for flags → approve. Everything is persisted and pushed to the app.
+ * Decides one card payment in milliseconds: the thinking happened earlier, when Clearance
+ * negotiated and released the funds. Order: absolute blocks → released funds → manager
+ * pre-approval → wrong purpose → no funds.
  */
-export async function decide(req: AuthRequest, opts: { realtime: boolean }): Promise<Transaction> {
+export async function decide(req: AuthRequest): Promise<Transaction> {
   const started = performance.now();
   const { results, preApproval } = evaluate(req);
 
   let status: Status;
   let decidedBy: DecidedBy = "rules";
-  let agent: AgentVerdict | null = null;
   let cited: RuleResult[];
   let summary: string;
+  const category = categorize(req.mcc);
+  const { match: cover, wrongPurpose } = funds.coverFor(req.employee.id, req.amount, category);
 
-  const hardBlocks = cite(results, "block").filter((r) => !(preApproval && (r.id === "P3" || r.id === "P4")));
-  const escalations = cite(results, "escalate");
-  const flags = cite(results, "flag");
+  // Funds released up front already cleared limits and budget, so only absolute blocks apply.
+  const hardBlocks = cite(results, "block").filter((r) => !((cover || preApproval) && (r.id === "P3" || r.id === "P4")));
 
   if (hardBlocks.length) {
     status = "declined";
     cited = hardBlocks;
     summary = `Declined: ${hardBlocks[0].evidence}`;
+  } else if (cover) {
+    status = "approved";
+    decidedBy = "allowance";
+    results.push({ id: "P11", title: "Funds first", outcome: "pass", evidence: `Drawn from ${gbp(cover.remaining)} released for "${cover.purpose}" (${cover.id}).` });
+    cited = results.slice(-1);
+    summary = `Approved from funds released for ${cover.purpose}.`;
   } else if (preApproval) {
     status = "approved";
     decidedBy = "pre_approval";
     cited = cite(results, "override");
     summary = `Approved with ${preApproval.approver ?? "manager"}'s pre-approval.`;
     repo.resolveApproval(preApproval.id, "used", null, null);
-  } else if (escalations.length) {
-    status = "escalated";
-    cited = escalations;
-    summary = `Held for manager approval: ${escalations[0].evidence}`;
-  } else if (flags.length) {
-    agent = agentEnabled() ? await review(req, results, opts.realtime ? DEADLINE_MS : HOLD_DEADLINE_MS) : null;
-    if (agent) {
-      status = statusFor[agent.decision];
-      decidedBy = "agent";
-      cited = results.filter((r) => r.outcome !== "pass" && agent!.cited_rules.includes(r.id));
-      if (!cited.length) cited = flags;
-      summary = agent.summary;
-    } else {
-      // Safe default when the agent is off or out of time: hold it for a human.
-      status = "escalated";
-      decidedBy = "timeout_fallback";
-      cited = flags;
-      summary = `Held for manager approval: ${flags[0].evidence}`;
-    }
+  } else if (wrongPurpose) {
+    status = "declined";
+    const r: RuleResult = { id: "P12", title: "Agreed purpose", outcome: "block", evidence: `Funds were released for ${wrongPurpose.purpose} (${wrongPurpose.category}), not ${category}.` };
+    results.push(r);
+    cited = [r];
+    summary = `Declined: these funds are for ${wrongPurpose.purpose}. Ask Clearance for new funds.`;
   } else {
-    status = "approved";
-    cited = [];
-    summary = `Approved: within the ${req.employee.role} policy.`;
+    status = "declined";
+    const available = funds.available(req.employee.id);
+    const r: RuleResult = {
+      id: "P11", title: "Funds first", outcome: "block",
+      evidence: available ? `Only ${gbp(available)} released; this payment is ${gbp(req.amount)}.` : "No funds released on this card.",
+    };
+    results.push(r);
+    cited = [r];
+    summary = available ? `Declined: ${gbp(req.amount)} is more than the ${gbp(available)} released. Tap + to ask for more.` : "Declined: your card has £0 released. Tap + to ask Clearance for funds.";
   }
 
   const tx: Transaction = {
     id: newId("tx"),
-    stripe_authorization_id: req.authorizationId,
+    stripe_authorization_id: cover?.stripe_hold ?? req.authorizationId,
     card_id: req.card.id,
     employee_id: req.employee.id,
     merchant: req.merchant,
@@ -85,7 +75,7 @@ export async function decide(req: AuthRequest, opts: { realtime: boolean }): Pro
     status,
     decided_by: decidedBy,
     rule_results: results,
-    agent,
+    agent: null,
     summary,
     cited_rules: cited.map((r) => r.id),
     latency_ms: Math.round(performance.now() - started),
@@ -94,24 +84,7 @@ export async function decide(req: AuthRequest, opts: { realtime: boolean }): Pro
     released_by: null,
   };
   repo.insertTransaction(tx);
-
-  if (status === "escalated") {
-    const approval = {
-      id: newId("apr"),
-      transaction_id: tx.id,
-      employee_id: req.employee.id,
-      merchant: req.merchant,
-      amount: req.amount,
-      reason: summary,
-      status: "pending" as const,
-      approver: null,
-      note: null,
-      created_at: tx.created_at,
-      resolved_at: null,
-    };
-    repo.insertApproval(approval);
-    broadcast("approval", approval);
-  }
+  if (cover) await spendFrom(cover, req.amount);
 
   console.log(`[decide] ${req.employee.name} ${gbp(req.amount)} @ ${req.merchant} → ${status} by ${decidedBy} in ${tx.latency_ms}ms [${tx.cited_rules.join(",")}]`);
   broadcast("transaction", tx);

@@ -83,3 +83,14 @@
   --tint-7-bg: #fbe4e1; --tint-7-fg: #b8483b;
   --tint-8-bg: #eef0d8; --tint-8-fg: #6b7420;
 }
+
+/* ---- Funds-first (cards start at £0) ---- */
+:root {
+  --funded: #1f9d4f;
+  --funded-glow: rgba(63, 191, 106, 0.45);
+  --seg-spent: #0f1a14;
+  --seg-rel: #3fbf6a;
+  --card-empty: linear-gradient(140deg, rgba(255, 255, 255, 0.92) 0%, rgba(236, 242, 238, 0.9) 55%, rgba(206, 220, 211, 0.9) 100%);
+  --card-funded-shadow: 0 26px 56px -18px rgba(31, 157, 79, 0.7), 0 0 0 1px rgba(63, 191, 106, 0.35), 0 2px 6px rgba(15, 26, 20, 0.05);
+  --cta-grad: linear-gradient(135deg, #0f1a14 0%, #17301f 60%, #1f4a2e 100%);
+}

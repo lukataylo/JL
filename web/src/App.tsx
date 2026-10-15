@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api, money, DECIDED_BY_LABEL,
-  type Approval, type Employee, type Health, type Overview, type PolicyDoc, type Transaction,
+  type Approval, type Employee, type FundRequest, type Health, type Overview, type PolicyDoc, type Transaction,
 } from "./api";
 import {
-  ApprovalCard, Avatar, MerchantAvatar, PaymentCard, PRESETS, Sheet, StatusPill, TransactionDetail, TransactionList,
+  ActiveFund, AnimatedMoney, ApprovalCard, Avatar, BudgetBar, FundDetail, FundRow, MerchantAvatar, PaymentCard, PRESETS, Sheet,
+  StatusPill, TransactionDetail, TransactionList,
 } from "./components";
 import { BrandMark, GlassLetterform, Icon } from "./icons";
 import { Negotiation } from "./Negotiation";
+import { RequestAgent } from "./RequestAgent";
+import { AgentOrb } from "./AgentOrb";
 
 type Tab = "home" | "approvals" | "audit" | "policy";
 
@@ -28,6 +31,8 @@ export default function App() {
   const [toast, setToast] = useState<Transaction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [freezing, setFreezing] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [openReq, setOpenReq] = useState<FundRequest | null>(null);
   const payingRef = useRef(false);
   payingRef.current = paying;
   const employeeRef = useRef(employeeId);
@@ -70,6 +75,13 @@ export default function App() {
       refresh();
     });
     es.addEventListener("approval", () => refresh());
+    es.addEventListener("funds", (e) => {
+      try {
+        const req = JSON.parse((e as MessageEvent).data) as FundRequest;
+        setOpenReq((cur) => (cur && cur.id === req.id ? req : cur));
+      } catch { /* ignore */ }
+      refresh();
+    });
     return () => es.close();
   }, [refresh]);
 
@@ -80,7 +92,7 @@ export default function App() {
   }, [toast]);
 
   const choose = (id: string) => { setEmployeeId(id); setTab("home"); };
-  const signOut = () => { setEmployeeId(null); setOpen(null); setPaying(false); };
+  const signOut = () => { setEmployeeId(null); setOpen(null); setPaying(false); setRequesting(false); setOpenReq(null); };
 
   if (!employeeId) {
     return <Welcome employees={employees} onChoose={choose} error={error} />;
@@ -99,9 +111,19 @@ export default function App() {
   const nameOf = (id: string) => employees.find((e) => e.id === id)?.name ?? id;
   const pending = approvals.filter((a) => a.status === "pending");
   const { employee, cards, transactions, monthSpent } = overview;
+  const available = overview.available ?? 0;
+  const requests = overview.requests ?? [];
+  const budgetLeft = overview.budgetLeft ?? Math.max(0, employee.monthly_budget - monthSpent);
   const card = cards[0];
-  const budgetPct = Math.min(100, (monthSpent / employee.monthly_budget) * 100);
+  const funded = available > 0;
   const myRequests = pending.filter((a) => a.employee_id === employee.id).length;
+  const activeFunds = requests.filter((r) => r.status === "released" && r.remaining > 0);
+  const pastFunds = requests.filter((r) => !activeFunds.includes(r)).slice(0, 5);
+  const startRequest = () => { setOpen(null); setPaying(false); setOpenReq(null); setRequesting(true); };
+  const returnFunds = async (id: string) => {
+    try { const r = await api.returnFunds(id); setOpenReq((cur) => (cur && cur.id === id ? r : cur)); await refresh(); }
+    catch (e) { setError((e as Error).message); }
+  };
 
   const toggleFreeze = async () => {
     if (!card || freezing) return;
@@ -148,26 +170,62 @@ export default function App() {
       <main className="content">
         {tab === "home" && (
           <div className="stack">
-            <section className="hero">
-              <div className="hero-label">Spent in {new Date().toLocaleDateString("en-GB", { month: "long" })}</div>
-              <div className="hero-amount">{money(monthSpent)}</div>
-              <div className="budget">
-                <div className={`budget-bar ${budgetPct >= 100 ? "over" : budgetPct >= 80 ? "warn" : ""}`}><div style={{ width: `${Math.max(2, budgetPct)}%` }} /></div>
-                <div className="budget-legend">
-                  <span>{money(Math.max(0, employee.monthly_budget - monthSpent))} left</span>
-                  <span>of {money(employee.monthly_budget)}</span>
+            <section className={`hero ${funded ? "hero-funded" : "hero-empty"}`}>
+              <div className="hero-label">
+                {funded ? <span className="hero-live" /> : <Icon name="lock" size={13} strokeWidth={2.2} />}
+                Available on card
+              </div>
+              <AnimatedMoney value={available} className="hero-amount" />
+              <div className="hero-stats">
+                <div className="hstat">
+                  <span className="hstat-label">Spent in {new Date().toLocaleDateString("en-GB", { month: "long" })}</span>
+                  <span className="hstat-value">{money(monthSpent)}</span>
+                </div>
+                <div className="hstat">
+                  <span className="hstat-label">Budget left</span>
+                  <span className="hstat-value">{money(budgetLeft)} <em>of {money(employee.monthly_budget)}</em></span>
                 </div>
               </div>
+              <BudgetBar budget={employee.monthly_budget} spent={monthSpent} released={available} />
             </section>
 
-            {card && <PaymentCard card={card} employee={employee} />}
+            <div className="request-wrap">
+              <button className="request-cta" onClick={startRequest} disabled={card?.status === "frozen"}>
+                <span className="request-orb"><AgentOrb state="idle" size={46} /><span className="request-plus"><Icon name="plus" size={14} strokeWidth={3} /></span></span>
+                <span className="request-text">
+                  <span className="request-title">Request funds</span>
+                  <span className="request-sub">Talk to Clearance · voice or text</span>
+                </span>
+                <span className="request-go"><Icon name="plus" size={22} strokeWidth={2.6} /></span>
+              </button>
+              {!funded && <p className="request-help"><Icon name="lock" size={13} /> Your card holds £0 until Clearance releases funds.</p>}
+            </div>
+
+            {card && <PaymentCard card={card} employee={employee} available={available} />}
 
             <div className="actions">
               <Action icon="tap" label="Tap to pay" primary onClick={() => setPaying(true)} disabled={!card || card.status === "frozen"} />
               <Action icon="snow" label={card?.status === "frozen" ? "Unfreeze" : "Freeze"} onClick={toggleFreeze} disabled={!card || freezing} active={card?.status === "frozen"} />
-              <Action icon="inbox" label="Requests" onClick={() => setTab("approvals")} badge={myRequests} />
+              <Action icon="inbox" label="Approvals" onClick={() => setTab("approvals")} badge={myRequests} />
               <Action icon="shield" label="Policy" onClick={() => setTab("policy")} />
             </div>
+
+            {(activeFunds.length > 0 || pastFunds.length > 0) && (
+              <>
+                <div className="list-head">
+                  <h2>Released funds</h2>
+                  <span>{activeFunds.length ? `${money(available)} on card` : "None active"}</span>
+                </div>
+                {activeFunds.map((r) => (
+                  <ActiveFund key={r.id} req={r} onOpen={() => setOpenReq(r)} onReturn={() => returnFunds(r.id)} />
+                ))}
+                {pastFunds.length > 0 && (
+                  <div className="glass list">
+                    {pastFunds.map((r) => <FundRow key={r.id} req={r} onOpen={() => setOpenReq(r)} />)}
+                  </div>
+                )}
+              </>
+            )}
 
             <div className="list-head">
               <h2>Activity</h2>
@@ -180,8 +238,8 @@ export default function App() {
         {tab === "approvals" && (
           <section className="stack">
             <PageHead title="Approvals" sub={employee.role === "finance"
-              ? "Payments Clearance held for a human. Approving lets one matching retry through."
-              : "Payments waiting for Finance. Once approved, retry the payment and it goes through."} />
+              ? "Payments and funds requests Clearance referred to a human. Approving releases them."
+              : "Payments and funds requests waiting for Finance. Once approved, the money is yours to use."} />
             {approvals.length === 0 && <div className="empty glass"><Icon name="checkCircle" size={26} /><div>All clear</div><span>Nothing is waiting for a decision.</span></div>}
             {[...pending, ...approvals.filter((a) => a.status !== "pending")].map((a) => (
               <ApprovalCard
@@ -247,7 +305,7 @@ export default function App() {
       </nav>
 
       <Sheet open={!!open} onClose={() => setOpen(null)} label="Payment details">
-        {open && <TransactionDetail key={open.id} tx={open} onNegotiate={() => setNegotiating(open)} />}
+        {open && <TransactionDetail key={open.id} tx={open} onNegotiate={() => setNegotiating(open)} onRequestFunds={startRequest} />}
       </Sheet>
 
       <Sheet open={paying} onClose={() => setPaying(false)} label="Tap to pay">
@@ -258,9 +316,29 @@ export default function App() {
             onResult={() => refresh()}
             onOpen={(tx) => { setPaying(false); setOpen(tx); }}
             onNegotiate={(tx) => { setPaying(false); setOpen(tx); setNegotiating(tx); }}
+            onRequestFunds={startRequest}
           />
         )}
       </Sheet>
+
+      <Sheet open={!!openReq} onClose={() => setOpenReq(null)} label="Funds request">
+        {openReq && (
+          <FundDetail
+            key={openReq.id}
+            req={openReq}
+            onReturn={openReq.status === "released" && openReq.remaining > 0 ? () => returnFunds(openReq.id) : undefined}
+            onContinue={openReq.status === "open" || openReq.status === "countered" ? startRequest : undefined}
+          />
+        )}
+      </Sheet>
+
+      {requesting && (
+        <RequestAgent
+          employee={employee}
+          onClose={() => { setRequesting(false); refresh(); }}
+          onChange={() => { refresh(); }}
+        />
+      )}
 
       {negotiating && (
         <Negotiation
@@ -315,12 +393,13 @@ function Welcome({ employees, onChoose, error }: { employees: Employee[]; onChoo
 type PayPreset = (typeof PRESETS)[number];
 const REVIEW_STEPS = ["Placing a Stripe test-mode hold", "Checking the spend policy", "Clearance agent reviewing", "Recording the decision"];
 
-function PaySheet({ cardId, onDone, onResult, onOpen, onNegotiate }: {
+function PaySheet({ cardId, onDone, onResult, onOpen, onNegotiate, onRequestFunds }: {
   cardId: string;
   onDone: () => void;
   onResult: () => void;
   onOpen: (tx: Transaction) => void;
   onNegotiate: (tx: Transaction) => void;
+  onRequestFunds: () => void;
 }) {
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [phase, setPhase] = useState<"pick" | "review" | "done" | "error">("pick");
@@ -376,23 +455,31 @@ function PaySheet({ cardId, onDone, onResult, onOpen, onNegotiate }: {
 
   if ((phase === "done" || phase === "error") && current) {
     const tx = result;
+    const fundsIssue = !!tx && tx.status === "declined" && (tx.cited_rules.includes("P11") || tx.cited_rules.includes("P12"));
+    const fundsRule = tx?.rule_results.find((r) => r.id === (tx.cited_rules.includes("P11") ? "P11" : "P12"));
     return (
-      <div className="result">
+      <div className={`result ${tx ? `result-${tx.status}` : "result-declined"}`}>
         {tx ? (
           <>
             <div className={`result-icon ri-${tx.status}`}>
               <Icon name={tx.status === "approved" ? "check" : tx.status === "declined" ? "x" : "clock"} size={34} strokeWidth={2.4} />
             </div>
-            <h3>{tx.status === "approved" ? "Cleared" : tx.status === "declined" ? "Declined" : "Sent to your manager"}</h3>
+            <h3>{tx.status === "approved" ? "Approved" : tx.status === "declined" ? "Declined" : "Sent to your manager"}</h3>
             <div className="result-amount">{money(tx.amount)} · {tx.merchant}</div>
             <StatusPill status={tx.status} />
             <p className="result-summary">{tx.summary}</p>
+            {fundsIssue && fundsRule && (
+              <div className="result-rule"><span className="rule-id">{fundsRule.id}</span>{fundsRule.evidence}</div>
+            )}
             <div className="result-by">{DECIDED_BY_LABEL[tx.decided_by]} · {tx.latency_ms.toLocaleString()} ms</div>
             <div className="result-actions">
-              {tx.status !== "approved" && (
+              {fundsIssue && (
+                <button className="btn btn-brand btn-block" onClick={onRequestFunds}><Icon name="plus" size={18} strokeWidth={2.6} /> Request funds</button>
+              )}
+              {tx.status !== "approved" && !fundsIssue && (
                 <button className="btn btn-ink btn-block" onClick={() => onNegotiate(tx)}><Icon name="sparkle" size={18} /> Negotiate with Clearance</button>
               )}
-              <button className={`btn btn-block ${tx.status === "approved" ? "btn-ink" : "btn-white"}`} onClick={() => onOpen(tx)}>See why</button>
+              <button className={`btn btn-block ${tx.status === "approved" ? "btn-approved" : "btn-white"}`} onClick={() => onOpen(tx)}>See why</button>
               <button className="btn btn-text" onClick={onDone}>Done</button>
             </div>
           </>

@@ -1,7 +1,7 @@
 export type Role = "engineer" | "sales" | "finance";
 export type Category =
   | "software" | "hardware" | "travel" | "lodging" | "transport" | "meals"
-  | "books" | "gifts" | "gambling" | "jewelry" | "cash" | "other";
+  | "books" | "gifts" | "repairs" | "gambling" | "jewelry" | "cash" | "other";
 
 export interface Employee {
   id: string;
@@ -48,7 +48,7 @@ export interface RuleResult {
 }
 
 export type Status = "approved" | "declined" | "escalated";
-export type DecidedBy = "rules" | "agent" | "pre_approval" | "timeout_fallback" | "manager" | "negotiation";
+export type DecidedBy = "rules" | "agent" | "pre_approval" | "timeout_fallback" | "manager" | "negotiation" | "allowance";
 
 export interface AgentVerdict {
   decision: "approve" | "decline" | "escalate";

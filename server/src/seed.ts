@@ -5,6 +5,7 @@
  */
 import "dotenv/config";
 import { db, newId, repo } from "./db.js";
+import "./funds.js";
 import { CURRENCY, stripe } from "./stripe.js";
 import { categorize } from "./policy.js";
 import type { Card, Employee } from "./types.js";
@@ -12,7 +13,7 @@ import type { Card, Employee } from "./types.js";
 const withStripe = process.argv.includes("--stripe");
 if (withStripe && !stripe) throw new Error("Set STRIPE_SECRET_KEY (sk_test_...) to seed Stripe.");
 
-db.exec("DELETE FROM employees; DELETE FROM cards; DELETE FROM transactions; DELETE FROM approvals; DELETE FROM memories; DELETE FROM negotiations;");
+db.exec("DELETE FROM employees; DELETE FROM cards; DELETE FROM transactions; DELETE FROM approvals; DELETE FROM memories; DELETE FROM negotiations; DELETE FROM fund_requests;");
 
 const people: (Omit<Employee, "stripe_cardholder_id"> & { card: Pick<Card, "color" | "nickname"> })[] = [
   { id: "emp_maya", name: "Maya Chen", email: "maya@acme.test", role: "engineer", team: "Platform", monthly_budget: 200_000, avatar_color: "#7C5CFF", card: { color: "violet", nickname: "Platform team" } },

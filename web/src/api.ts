@@ -1,6 +1,6 @@
 export type Role = "engineer" | "sales" | "finance";
 export type Status = "approved" | "declined" | "escalated";
-export type DecidedBy = "rules" | "agent" | "pre_approval" | "timeout_fallback" | "manager" | "negotiation";
+export type DecidedBy = "rules" | "agent" | "pre_approval" | "timeout_fallback" | "manager" | "negotiation" | "allowance";
 
 export interface Employee {
   id: string; name: string; email: string; role: Role; team: string;
@@ -36,9 +36,29 @@ export interface Approval {
   status: "pending" | "approved" | "rejected" | "used"; approver: string | null; note: string | null;
   created_at: string; resolved_at: string | null;
 }
-export interface Overview { employee: Employee; cards: Card[]; transactions: Transaction[]; monthSpent: number; limit: number }
+/** Money Clearance released onto the card after a negotiation. Cards start at £0. */
+export interface FundRequest {
+  id: string; employee_id: string;
+  /** open/countered = still talking; released = on the card; spent = used (or returned). */
+  status: "open" | "countered" | "released" | "referred" | "denied" | "spent";
+  messages: NegotiationMessage[];
+  purpose: string | null; category: string | null;
+  amount_requested: number | null; counter_amount: number | null; amount_released: number | null;
+  remaining: number; stripe_hold: string | null; created_at: string;
+}
+export interface Overview {
+  employee: Employee; cards: Card[]; transactions: Transaction[];
+  monthSpent: number; limit: number;
+  /** Released and unspent — what the card can spend right now. */
+  available: number;
+  /** Monthly budget minus spent minus released-unspent. */
+  budgetLeft: number;
+  requests: FundRequest[];
+}
 export interface Health { stripe: boolean; stripeMode: "issuing" | "payments" | "off"; agent: boolean; model: string; currency: string }
-export interface PolicyDoc { policy: { company: string; version: string }; rules: { id: string; title: string; text: string }[] }
+export interface PolicyDoc {
+  policy: { company: string; version: string; roles?: Record<Role, { perTxnLimit: number; categories: string[] }>; prohibitedCategories?: string[] };
+  rules: { id: string; title: string; text: string }[] }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -66,6 +86,12 @@ export const api = {
     call<{ negotiation: Negotiation; transaction: Transaction }>(`/transactions/${txId}/negotiation`, { method: "POST", body: JSON.stringify({ message }) }),
   acceptCounter: (txId: string) =>
     call<{ negotiation: Negotiation; transaction: Transaction }>(`/transactions/${txId}/negotiation`, { method: "POST", body: JSON.stringify({ accept: true }) }),
+  /** Talk to Clearance about funds. Omit requestId to start a new request. ~3-15s per reply. */
+  requestFunds: (employeeId: string, message: string, requestId?: string | null, category?: string | null) =>
+    call<FundRequest>("/requests", { method: "POST", body: JSON.stringify({ employeeId, message, requestId, category }) }),
+  fundRequest: (id: string) => call<FundRequest>(`/requests/${id}`),
+  acceptFunds: (id: string) => call<FundRequest>(`/requests/${id}/accept`, { method: "POST" }),
+  returnFunds: (id: string) => call<FundRequest>(`/requests/${id}/return`, { method: "POST" }),
   simulate: (body: { cardId: string; merchant: string; mcc: string; amount: number; city?: string; hour?: number }) =>
     call<{ transaction?: Transaction }>("/simulate", { method: "POST", body: JSON.stringify(body) }),
 };
@@ -85,4 +111,5 @@ export const DECIDED_BY_LABEL: Record<DecidedBy, string> = {
   timeout_fallback: "Safe default",
   manager: "Manager",
   negotiation: "Negotiated with Clearance",
+  allowance: "Released funds",
 };
