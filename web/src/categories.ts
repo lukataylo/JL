@@ -81,3 +81,9 @@ export function spentThisMonth(transactions: Transaction[]): Partial<Record<Cate
   }
   return out;
 }
+
+/** Flat bright tile colour per category: index into --tint-1..9 (9 = muted grey for prohibited). */
+export const CATEGORY_TINT: Record<string, number> = {
+  software: 5, hardware: 8, travel: 2, lodging: 4, transport: 6, meals: 3, books: 1, gifts: 4,
+  repairs: 7, other: 1, gambling: 9, jewelry: 9, cash: 9,
+};

@@ -484,21 +484,11 @@ body:has(.ra-overlay) .da-aura:not(.da-aura--approved):not(.da-aura--declined) {
  * The aura gradient appears only behind the agent's eyes, the balance hero and a released outcome.
  * Everything else is one solid colour: no gloss, specular highlights, blooms or tinted gradients. */
 
-/* Orbs and monograms → flat white discs with ink glyphs */
-.da-orb, .mono {
-  background: var(--surface-solid, #fff) !important;
-  color: var(--ink) !important;
-  box-shadow: inset 0 0 0 1px rgba(20, 20, 20, 0.07);
-}
-.mono::before { display: none; }
 .avatar { background: var(--ink) !important; color: #fff !important; }
-
-/* Expense picker dial */
-.ep-orb { background: var(--surface-solid, #fff) !important; color: var(--ink) !important; box-shadow: inset 0 0 0 1px rgba(20, 20, 20, 0.07); }
 .ep-orb svg { filter: none; }
-.ep-icon.is-cur .ep-orb, .ep-ro-orb { background: var(--ink) !important; color: #fff !important; box-shadow: 0 0 0 4px var(--bg), 0 0 0 6px var(--ink); }
-.ep-ro-orb { box-shadow: none; }
-.ep-icon.is-locked .ep-orb { filter: none; opacity: 1; background: transparent !important; color: #b4b4b1 !important; box-shadow: inset 0 0 0 1.5px #d6d6d3; }
+.ep-icon.is-cur .ep-orb { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5.5px var(--ink) !important; }
+.ep-ro-orb { box-shadow: none !important; }
+.ep-icon.is-locked .ep-orb { filter: none; opacity: 1; background: var(--tint-9-bg) !important; color: #fff !important; }
 
 /* Request funds button: flat ink, no glow */
 .request-cta::before { display: none; }
@@ -523,3 +513,90 @@ body:has(.ra-overlay) .da-aura:not(.da-aura--approved):not(.da-aura--declined) {
 .neg-card-foot { color: var(--ink); }
 .neg-offer-legend .dot--brand { background: var(--ink); }
 .neg-chip { background: var(--surface-solid, #fff); box-shadow: none; border-color: transparent; }
+
+/* ===================== Flat bright modern (no bubbles) ===================== */
+:root {
+  --bg: #f2f2f0;
+  --bg-grad: #f2f2f0;
+  --text: #111111; --ink: #111111;
+  --line: rgba(17, 17, 17, 0.08);
+  --blur: none;
+  --shadow-sm: none; --shadow: none; --shadow-lg: none;
+  --blue: #2f6bff; --orange: #ff6a1a; --pink: #ff5fa2; --violet: #7b5cff; --teal: #12b5a6; --amber: #ffb020; --red: #ff3b30;
+  --approved: #111111;   --approved-bg: #e4f25a;
+  --declined: #ff3b30;   --declined-bg: #ffe5e3;
+  --escalated: #8a5200;  --escalated-bg: #ffb020;
+  --agent: #7b5cff;      --agent-bg: #ece7ff;
+  --frost: #2f6bff;      --frost-bg: #e3ebff;
+  --tint-1-bg: #2f6bff; --tint-1-fg: #ffffff;
+  --tint-2-bg: #ff6a1a; --tint-2-fg: #ffffff;
+  --tint-3-bg: #e4f25a; --tint-3-fg: #111111;
+  --tint-4-bg: #ff5fa2; --tint-4-fg: #ffffff;
+  --tint-5-bg: #7b5cff; --tint-5-fg: #ffffff;
+  --tint-6-bg: #12b5a6; --tint-6-fg: #ffffff;
+  --tint-7-bg: #ffb020; --tint-7-fg: #111111;
+  --tint-8-bg: #111111; --tint-8-fg: #ffffff;
+  --tint-9-bg: #d9d9d6; --tint-9-fg: #8f8f8c;
+}
+body { background: var(--bg); }
+*, *::before, *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+
+.da-orb, .mono.da-orb {
+  background: var(--o-bg, #111) !important; color: var(--o-fg, #fff) !important;
+  box-shadow: none; border-radius: 30%;
+  display: grid; place-items: center;
+}
+.mono, .mono.da-orb { border-radius: 30%; box-shadow: none; overflow: visible; }
+.mono::before { content: none; display: none; }
+.mono-glyph { display: block; }
+.mono-badge {
+  width: 20px; height: 20px; right: -5px; bottom: -5px; border: 0;
+  box-shadow: 0 0 0 2.5px var(--surface-solid, #fff);
+}
+.mono-approved { background: var(--wasabi); color: var(--ink); }
+.mono-declined { background: var(--red); color: #fff; box-shadow: 0 0 0 2.5px var(--surface-solid, #fff); }
+.mono-escalated { background: var(--amber); color: var(--ink); }
+
+/* flat buttons, chips, cards */
+.btn-ink, .btn-white, .btn-brand, .btn-approved, .pill-btn, .hstat { box-shadow: none !important; }
+.btn-white, .pill-btn { border: 1px solid var(--line); }
+.seg-rel { box-shadow: none; }
+.mode.on .dot, .hero-live { box-shadow: none; }
+.pill-declined { background: var(--red); color: #fff; box-shadow: none; }
+.pill-escalated { background: var(--amber); color: var(--ink); }
+.pill-agent { background: var(--violet); color: #fff; }
+
+/* ---------- Real payment card (flat) ---------- */
+.rcard {
+  position: relative; aspect-ratio: 1.586; border-radius: 22px; padding: 22px 24px;
+  display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;
+  color: #fff; background: #111; font-family: "Geist", var(--font);
+}
+.rcard-funded { background: #FF6A1A; }
+.rcard-empty { background: #1A1A1A; }
+.rcard-frozen { background: #8E8E8C; }
+.rcard-top { display: flex; justify-content: space-between; align-items: center; }
+.rcard-brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 19px; letter-spacing: -0.02em; }
+.rcard-type { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.8; }
+.rcard-row { display: flex; align-items: center; gap: 14px; }
+.rcard-chip { width: 46px; height: 36px; flex: none; }
+.rcard-chip rect { fill: #E4F25A; stroke: none; }
+.rcard-chip path { fill: none; stroke: rgba(17, 17, 17, 0.45); stroke-width: 1.4; }
+.rcard-nfc { opacity: 0.9; }
+.rcard-bal {
+  margin-left: auto; font-family: "Doto", monospace; font-weight: 900; font-size: 30px; letter-spacing: 0.02em;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.rcard-empty .rcard-bal { font-size: 22px; opacity: 0.7; }
+.rcard-number { font-family: "Doto", monospace; font-weight: 800; font-size: 21px; letter-spacing: 0.1em; white-space: nowrap; }
+.rcard-bottom { display: flex; align-items: flex-end; gap: 26px; }
+.rcard-label { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.7; margin-bottom: 3px; }
+.rcard-name { font-size: 14px; font-weight: 600; letter-spacing: 0.06em; }
+.rcard-network { margin-left: auto; display: inline-flex; }
+.rcard-network i { width: 30px; height: 30px; border-radius: 50%; background: #fff; opacity: 0.95; }
+.rcard-network i + i { margin-left: -12px; background: #E4F25A; mix-blend-mode: multiply; }
+.rcard-frozen-veil {
+  position: absolute; inset: 0; display: grid; place-items: center; grid-auto-flow: column; gap: 8px;
+  font-weight: 700; font-size: 18px; background: rgba(17, 17, 17, 0.35);
+}
+@media (max-width: 360px) { .rcard-number { font-size: 17px; } .rcard-bal { font-size: 24px; } }

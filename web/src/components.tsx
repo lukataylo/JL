@@ -5,6 +5,7 @@ import {
   type Approval, type Card, type Employee, type FundRequest, type Transaction,
 } from "./api";
 import { BrandMark, Icon } from "./icons";
+import { CATEGORY_TINT } from "./categories";
 
 /* ---------- Avatars ---------- */
 
@@ -26,12 +27,15 @@ function hash(s: string) {
 export function MerchantAvatar({ merchant, category, status, size = 44 }: {
   merchant: string; category: string; status?: Transaction["status"]; size?: number;
 }) {
-  const tint = (hash(merchant) % 8) + 1;
+  const tint = CATEGORY_TINT[category] ?? (hash(merchant) % 8) + 1;
   return (
     <GlassOrb tint={tint} size={size} label={merchant} className="mono">
-      <span className={`mono-badge ${status ? `mono-${status}` : ""}`}>
-        <Icon name={status === "declined" ? "x" : status === "escalated" ? "clock" : status === "approved" ? "check" : category} size={11} strokeWidth={status === "approved" ? 2.8 : 2.2} />
-      </span>
+      <Icon name={category} size={Math.round(size * 0.5)} className="mono-glyph" />
+      {status && (
+        <span className={`mono-badge mono-${status}`}>
+          <Icon name={status === "declined" ? "x" : status === "escalated" ? "clock" : "check"} size={12} strokeWidth={2.6} />
+        </span>
+      )}
     </GlassOrb>
   );
 }
@@ -42,33 +46,35 @@ export function PaymentCard({ card, employee, available }: { card: Card; employe
   const frozen = card.status === "frozen";
   const funded = (available ?? 0) > 0;
   return (
-    <div className={`pcard ${frozen ? "frozen" : ""} ${available === undefined ? "" : funded ? "pcard-funded" : "pcard-empty"}`}>
-      <div className="pcard-bars" aria-hidden="true"><i /><i /><i /><i /></div>
-      <div className="pcard-top">
-        <span className="pcard-brand"><BrandMark size={22} /> clearance</span>
-        <span className="pcard-tag">{card.stripe_card_id ? "Stripe · test" : "Virtual"}</span>
+    <div className={`rcard ${frozen ? "rcard-frozen" : ""} ${funded ? "rcard-funded" : "rcard-empty"}`} role="img"
+      aria-label={`Virtual debit card ending ${card.last4}, ${available === undefined ? "" : `${money(available)} available`}`}>
+      <div className="rcard-top">
+        <span className="rcard-brand"><BrandMark size={20} /> clearance</span>
+        <span className="rcard-type">Virtual debit</span>
       </div>
-      <div className="pcard-mid">
-        <div className="pcard-chip" />
-        <Icon name="tap" size={22} className="pcard-nfc" />
+      <div className="rcard-row">
+        <svg className="rcard-chip" viewBox="0 0 46 36" aria-hidden="true">
+          <rect x="0.5" y="0.5" width="45" height="35" rx="7" />
+          <path d="M0 12h14M0 24h14M32 12h14M32 24h14M14 0v36M32 0v36M14 18h18" />
+        </svg>
+        <Icon name="tap" size={26} className="rcard-nfc" />
         {available !== undefined && (
-          <div className="pcard-bal">
-            <span className="pcard-bal-label">{funded ? "Available" : <><Icon name="lock" size={11} strokeWidth={2.2} /> Locked</>}</span>
-            <span className="pcard-bal-value">{money(available)}</span>
-          </div>
+          <span className="rcard-bal">{funded ? money(available) : <><Icon name="lock" size={12} /> £0.00</>}</span>
         )}
       </div>
-      <div className="pcard-bottom">
+      <div className="rcard-number">•••• •••• •••• {card.last4}</div>
+      <div className="rcard-bottom">
         <div>
-          <div className="pcard-number">•••• {card.last4}</div>
-          <div className="pcard-name">{employee.name}</div>
+          <div className="rcard-label">Cardholder</div>
+          <div className="rcard-name">{employee.name.toUpperCase()}</div>
         </div>
-        <div className="pcard-right">
-          <div className="pcard-label">{card.nickname}</div>
-          <div className="pcard-exp">{card.exp}</div>
+        <div>
+          <div className="rcard-label">Valid thru</div>
+          <div className="rcard-name">{card.exp}</div>
         </div>
+        <span className="rcard-network" aria-hidden="true"><i /><i /></span>
       </div>
-      {frozen && <div className="pcard-frozen"><span><Icon name="snow" size={18} /> Frozen</span></div>}
+      {frozen && <div className="rcard-frozen-veil"><Icon name="snow" size={18} /> Frozen</div>}
     </div>
   );
 }
@@ -337,7 +343,7 @@ function Timeline({ tx, exceptions }: { tx: Transaction; exceptions: number }) {
 /* ---------- Presets / approvals ---------- */
 
 export const PRESETS = [
-  { merchant: "Pimlico Plumbers", mcc: "general_contractors", amount: 26_500, note: "Emergency call-out", category: "other" },
+  { merchant: "Pimlico Plumbers", mcc: "plumbing_heating_equipment_and_supplies", amount: 26_500, note: "Emergency call-out", category: "repairs" },
   { merchant: "Addison Lee", mcc: "taxicabs_limousines", amount: 4_800, note: "Late taxi home", category: "transport" },
   { merchant: "Figma", mcc: "computer_software_stores", amount: 4_500, note: "Approved SaaS vendor", category: "software" },
   { merchant: "Hôtel Pullman Paris", mcc: "hotels_motels_and_resorts", amount: 18_900, city: "Paris", note: "Conference trip", category: "lodging" },

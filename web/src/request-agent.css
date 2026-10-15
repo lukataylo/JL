@@ -1,70 +1,96 @@
 /* Ask Clearance for funds — full-screen voice/text agent. Classes prefixed ra- (screen) and orb- (AgentOrb). */
 
-/* ================= Orb ================= */
-/* The orb is now a face: dot-matrix eyes (canvas) over a blurred mood aura, clipped to a squircle screen. */
+/* ================= Agent face ================= */
+@property --oa { syntax: "<color>"; inherits: true; initial-value: #9aa6c8; }
+@property --ob { syntax: "<color>"; inherits: true; initial-value: #c9b8f0; }
+@property --oc { syntax: "<color>"; inherits: true; initial-value: #dfe4f2; }
 .orb {
+  --oa: #8f9cc4; --ob: #c3b4ee; --oc: #e3e6f4;
   position: relative;
   display: inline-block;
   flex: none;
   isolation: isolate;
   border-radius: 34%;
   overflow: hidden;
-  background: #aeb8c8;
-  box-shadow: 0 18px 40px -18px rgba(20, 20, 20, 0.45);
-  transition: box-shadow 0.6s;
+  background: var(--oa);
+  color: #fff;
+  transition: --oa 0.9s ease, --ob 0.9s ease, --oc 0.9s ease, box-shadow 0.6s;
+  box-shadow: 0 16px 36px -18px color-mix(in srgb, var(--oa) 80%, #000);
 }
+.orb--listening { --oa: #4f6ff0; --ob: #8fb0ff; --oc: #d6e3ff; }
+.orb--thinking  { --oa: #e9a23b; --ob: #b9a8ff; --oc: #f6d08a; }
+.orb--speaking  { --oa: #7c6cf0; --ob: #f6b24a; --oc: #c9bcff; }
+.orb--approved  { --oa: #f2701f; --ob: #f6b24a; --oc: #ffd38a; }
+.orb--declined  { --oa: #d9655a; --ob: #e79a8e; --oc: #f6c9c0; }
+.orb--countered { --oa: #e8902a; --ob: #f6c46a; --oc: #ffe2a8; }
+.orb--referred  { --oa: #7f86e0; --ob: #b9a8ff; --oc: #d8dcff; }
 .orb-aura {
   position: absolute;
-  inset: -25%;
-  filter: blur(14px);
-  transition: background 0.8s ease, opacity 0.6s;
+  inset: -30%;
+  filter: blur(22px);
   background:
-    radial-gradient(40% 36% at 60% 40%, #e9d8f0 0%, rgba(233, 216, 240, 0) 100%),
-    radial-gradient(50% 44% at 35% 60%, #c9d3e6 0%, rgba(201, 211, 230, 0) 100%),
-    #aeb8c8;
+    radial-gradient(34% 30% at 62% 38%, var(--oc) 0%, transparent 100%),
+    radial-gradient(48% 42% at 34% 64%, var(--ob) 0%, transparent 100%),
+    radial-gradient(60% 50% at 80% 80%, var(--ob) 0%, transparent 100%),
+    var(--oa);
 }
-.orb--listening .orb-aura, .orb--speaking .orb-aura {
-  background:
-    radial-gradient(40% 36% at 60% 40%, #f6b24a 0%, rgba(246, 178, 74, 0) 100%),
-    radial-gradient(50% 44% at 35% 60%, #c9d3e6 0%, rgba(201, 211, 230, 0) 100%),
-    #b9b4c4;
-}
-.orb--thinking .orb-aura {
-  background:
-    radial-gradient(40% 36% at 60% 36%, #f6b24a 0%, rgba(246, 178, 74, 0) 100%),
-    radial-gradient(50% 46% at 36% 62%, #b9a8ff 0%, rgba(185, 168, 255, 0) 100%),
-    #c9b7d8;
-}
-.orb--approved .orb-aura {
-  background:
-    radial-gradient(38% 34% at 58% 38%, #f2701f 0%, rgba(242, 112, 31, 0) 100%),
-    radial-gradient(46% 40% at 44% 42%, #f6b24a 0%, rgba(246, 178, 74, 0) 100%),
-    radial-gradient(60% 50% at 30% 72%, rgba(233, 170, 190, 0.8) 0%, rgba(233, 170, 190, 0) 100%),
-    #e8b79a;
-}
-.orb--countered .orb-aura, .orb--referred .orb-aura {
-  background:
-    radial-gradient(40% 36% at 58% 40%, #ffbf5e 0%, rgba(255, 191, 94, 0) 100%),
-    radial-gradient(50% 44% at 36% 60%, #ffd9b0 0%, rgba(255, 217, 176, 0) 100%),
-    #e9c39e;
-}
-.orb--declined .orb-aura {
-  background:
-    radial-gradient(40% 36% at 58% 40%, #e8443f 0%, rgba(232, 68, 63, 0) 100%),
-    radial-gradient(50% 44% at 38% 62%, #f59a8a 0%, rgba(245, 154, 138, 0) 100%),
-    #d98f88;
-}
-.orb--approved { box-shadow: 0 22px 46px -16px rgba(242, 112, 31, 0.6); }
-.orb--declined { box-shadow: 0 22px 46px -16px rgba(232, 68, 63, 0.55); }
-@media (prefers-reduced-motion: no-preference) {
-  .orb-aura { animation: orb-drift 9s ease-in-out infinite alternate; }
-}
-@keyframes orb-drift { to { transform: translate(6%, -5%) scale(1.08); } }
-.orb-canvas {
+.orb-grid {
   position: absolute;
   inset: 0;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.28) 1.3px, transparent 1.8px);
+  background-size: 14px 14px;
+  background-position: 7px 7px;
   pointer-events: none;
 }
+@media (prefers-reduced-motion: no-preference) {
+  .orb-aura { animation: orb-drift 10s ease-in-out infinite alternate; }
+}
+@keyframes orb-drift { to { transform: translate(7%, -6%) scale(1.1) rotate(8deg); } }
+.orb-canvas { position: absolute; inset: 0; pointer-events: none; }
+
+/* Wide card variant (agent screen) */
+.orb--card {
+  display: block;
+  width: 100%;
+  border-radius: 36px;
+  box-shadow: 0 24px 50px -26px color-mix(in srgb, var(--oa) 90%, #000);
+}
+.orb--card .orb-grid { background-size: 14px 14px; }
+.orb-brand {
+  position: absolute; top: 20px; left: 22px;
+  font-family: var(--font, "Inter Tight", system-ui, sans-serif);
+  font-size: 22px; font-weight: 600; letter-spacing: -0.02em;
+  color: #fff;
+}
+.orb-pill {
+  position: absolute; top: 20px; right: 18px;
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 28px; padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.12em;
+  color: #fff;
+}
+.orb-pill i { width: 7px; height: 7px; border-radius: 50%; background: #fff; }
+.orb--listening .orb-pill i, .orb--thinking .orb-pill i, .orb--speaking .orb-pill i { animation: orb-blinkdot 1s ease-in-out infinite; }
+@keyframes orb-blinkdot { 50% { opacity: 0.25; } }
+.orb-word {
+  position: absolute; left: 0; right: 0; bottom: 16px;
+  text-align: center;
+  font-family: "Doto", ui-monospace, monospace;
+  font-weight: 900;
+  font-size: 34px; line-height: 1;
+  letter-spacing: 0.1em;
+  color: #fff;
+  white-space: nowrap;
+  animation: orb-word-in 0.45s ease both;
+}
+.orb--referred .orb-word { font-size: 28px; }
+@keyframes orb-word-in { from { opacity: 0; transform: translateY(6px); filter: blur(3px); } }
+@media (prefers-reduced-motion: reduce) { .orb-word, .orb-pill i { animation: none !important; } }
+
 /* ================= Overlay ================= */
 .ra-overlay {
   position: fixed;
@@ -415,4 +441,84 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ra-overlay, .ra-bloom, .ra-msg, .ra-outcome, .ra-steps span.is-on, .ra-mic.is-on::after { animation: none !important; }
+}
+
+/* ================= Reference layout: aura card + big voice control ================= */
+.ra-overlay { background: #f2f2f0; background-color: #f2f2f0; }
+.ra-bloom { display: none; }
+.ra-header { padding-top: calc(env(safe-area-inset-top, 0px) + 8px); }
+.ra-title-name { display: none; }
+.ra-title-sub { margin-top: 0; }
+.ra-iconbtn { background: #fff; border: 0; box-shadow: none; }
+.ra-stage { flex: none; padding: 8px 16px 0; display: flex; flex-direction: column; align-items: stretch; }
+.ra-orbbtn { display: block; width: 100%; margin: 0; padding: 0; border: 0; background: none; border-radius: 36px; cursor: pointer; transform: none !important; }
+.ra-orbbtn:focus-visible { outline-offset: 4px; }
+.ra-stage .orb--card { height: clamp(230px, 36vh, 380px) !important; }
+.ra-status { margin-top: 8px; font-size: 13px; font-weight: 600; color: var(--text-2, #555); text-align: center; letter-spacing: -0.01em; }
+.ra-status--ok, .ra-status--bad { font-size: 14px; }
+.ra-steps { justify-content: center; padding: 6px 16px 0; margin: 0; }
+
+.ra-live {
+  flex: none;
+  margin: 8px 20px 0;
+  font-size: 22px; font-weight: 650; letter-spacing: -0.025em; line-height: 1.2;
+  text-align: center; color: var(--ink, #0f1a14);
+  max-height: 2.5em; overflow: hidden;
+}
+
+/* big mic */
+.ra-voice { flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; justify-items: center; column-gap: 14px; padding: 12px 16px 0; }
+.ra-voice .ra-bigmic { grid-column: 2; }
+.ra-voice .ra-bars { grid-column: 1; grid-row: 1; justify-self: end; }
+.ra-voice .ra-bars--flip { grid-column: 3; justify-self: start; }
+.ra-voice-label { grid-column: 1 / -1; margin-top: 8px; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink, #0f1a14); font-family: "Geist Mono", ui-monospace, monospace; }
+.ra-bigmic {
+  position: relative;
+  width: 76px; height: 76px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--ink, #0f1a14);
+  color: #fff;
+  display: grid; place-items: center;
+  cursor: pointer;
+  box-shadow: 0 14px 30px -12px rgba(15, 26, 20, 0.55);
+  transition: transform 0.15s, background 0.25s, color 0.25s;
+}
+.ra-bigmic svg { position: relative; z-index: 1; }
+.ra-bigmic:active { transform: scale(0.94); }
+.ra-bigmic:disabled { opacity: 0.35; cursor: default; }
+.ra-bigmic.is-on { background: #e4f25a; color: var(--ink, #0f1a14); box-shadow: 0 14px 34px -10px rgba(170, 190, 30, 0.8); }
+.ra-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(15, 26, 20, 0.18); opacity: 0; pointer-events: none; }
+.ra-bigmic:not(:disabled):not(.is-on) .ra-ring { animation: ra-ring 2.6s ease-out infinite; }
+.ra-bigmic.is-on .ra-ring { border-color: #cfdc3c; animation: ra-ring 1.2s ease-out infinite; }
+.ra-ring--2 { animation-delay: 0.6s !important; }
+.ra-bigmic.is-on .ra-ring--2 { animation-delay: 0.6s !important; }
+@keyframes ra-ring { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(1.7); opacity: 0; } }
+
+.ra-bars { display: flex; gap: 4px; align-items: flex-end; }
+.ra-bars--flip { flex-direction: row-reverse; }
+.ra-bar { display: flex; flex-direction: column; gap: 3px; }
+.ra-bar i { width: 7px; height: 7px; border-radius: 50%; background: rgba(15, 26, 20, 0.12); transition: background 0.08s; }
+.ra-bar i.on { background: var(--ink, #0f1a14); }
+
+/* flat bubbles */
+.ra-chat { padding-top: 12px; }
+.ra-bubble { font-size: 15px; border-radius: 22px; }
+.ra-msg--agent .ra-bubble { background: #fff; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; border-bottom-left-radius: 8px; color: var(--ink, #0f1a14); }
+.ra-msg--employee .ra-bubble { background: var(--ink, #0f1a14); color: #fff; box-shadow: none; border-bottom-right-radius: 8px; }
+.ra-typing i { background: var(--ink, #0f1a14); }
+.ra-rules span { background: #fff; border: 0; }
+
+/* secondary text input */
+.ra-inputrow--slim .ra-pill { height: 44px; box-shadow: none; background: #fff; border: 0; }
+.ra-inputrow--slim .ra-pill input { font-size: 14px; }
+.ra-chip { background: #fff; border: 0; box-shadow: none; }
+
+@media (max-height: 700px) {
+  .ra-stage .orb--card { height: 210px !important; }
+  .ra-bigmic { width: 64px; height: 64px; }
+  .ra-voice { padding-top: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ra-ring { animation: none !important; }
 }

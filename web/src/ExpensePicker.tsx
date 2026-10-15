@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { money, type Employee, type PolicyDoc, type Transaction } from "./api";
-import { CATEGORY_META, categoryStatus, dialOrder, spentThisMonth, type Category } from "./categories";
+import { CATEGORY_META, CATEGORY_TINT, categoryStatus, dialOrder, spentThisMonth, type Category } from "./categories";
 import { GlassOrb } from "./DotAura";
 import { Icon } from "./icons";
 import "./expense-picker.css";
@@ -233,8 +233,8 @@ export function ExpensePicker({ employee, policy, transactions, budgetLeft, onPi
                     else api.current?.to(i);
                   }}
                 >
-                  <GlassOrb tint={CATEGORY_META[c].tint} size={60} label={CATEGORY_META[c].label} className="ep-orb">
-                    <Icon name={c} size={24} strokeWidth={2} />
+                  <GlassOrb tint={CATEGORY_TINT[c]} size={60} label={CATEGORY_META[c].label} className="ep-orb">
+                    <Icon name={c} size={28} strokeWidth={2} />
                   </GlassOrb>
                   {s === "blocked" && <span className="ep-lock"><Icon name="lock" size={12} strokeWidth={2.2} /></span>}
                 </button>
@@ -250,7 +250,7 @@ export function ExpensePicker({ employee, policy, transactions, budgetLeft, onPi
           aria-live="polite"
         >
           <div className="ep-ro-top">
-            <GlassOrb tint={meta.tint} size={36} label="" className="ep-orb ep-ro-orb"><Icon name={cur} size={16} strokeWidth={2.2} /></GlassOrb>
+            <GlassOrb tint={CATEGORY_TINT[cur]} size={36} label="" className="ep-orb ep-ro-orb"><Icon name={cur} size={20} strokeWidth={2.2} /></GlassOrb>
             <h2 className="ep-ro-name">{meta.label}</h2>
             {st === "ok" && <span className="ep-pill ep-pill--ok">In your role</span>}
             {st === "reason" && <span className="ep-pill ep-pill--reason">Needs a reason · P2</span>}

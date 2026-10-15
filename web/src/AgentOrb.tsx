@@ -3,40 +3,133 @@ import "./request-agent.css";
 
 export type OrbState = "idle" | "listening" | "thinking" | "speaking" | "approved" | "declined" | "countered" | "referred";
 
-/**
- * Eye shape in dot-grid units. w/h = half-size of a squircle eye, top = upper lid drop,
- * slant = lid tilt toward the nose (+ angry, - sad), happy = carve the bottom into an arch,
- * bottom = lower lid lift, lx/ly = gaze offset, gap = extra spread between the eyes.
- */
-interface Eye { w: number; h: number; top: number; slant: number; happy: number; bottom: number; lx: number; ly: number; gap: number }
-
-const EYES: Record<OrbState, Eye> = {
-  idle:      { w: 3.6, h: 5.2, top: 0,   slant: 0,     happy: 0, bottom: 0,   lx: 0,    ly: 0,    gap: 0 },
-  listening: { w: 4.2, h: 6.2, top: 0,   slant: 0,     happy: 0, bottom: 0,   lx: 0,    ly: 0.2,  gap: 0 },
-  thinking:  { w: 3.4, h: 4.6, top: 0.6, slant: 0,     happy: 0, bottom: 0,   lx: 0.7,  ly: -0.7, gap: 0 },
-  speaking:  { w: 3.8, h: 5.4, top: 0,   slant: 0,     happy: 0, bottom: 0,   lx: 0,    ly: 0,    gap: 0 },
-  approved:  { w: 4.4, h: 5.2, top: 0,   slant: 0,     happy: 1, bottom: 0,   lx: 0,    ly: -0.2, gap: 0 },
-  declined:  { w: 4.4, h: 5.4, top: 2.2, slant: 0.55,  happy: 0, bottom: 0,   lx: 0,    ly: 0.2,  gap: 0 },
-  countered: { w: 4.4, h: 5.2, top: 2.8, slant: 0.18,  happy: 0, bottom: 1.4, lx: -0.5, ly: 0,    gap: 0 },
-  referred:  { w: 3.8, h: 4.8, top: 1.6, slant: -0.42, happy: 0, bottom: 0,   lx: 0,    ly: 0.6,  gap: 0 },
+/** Status word shown on the card for each mood. */
+export const ORB_WORD: Record<OrbState, string> = {
+  idle: "READY",
+  listening: "LISTENING",
+  thinking: "THINKING",
+  speaking: "SPEAKING",
+  approved: "RELEASED",
+  declined: "REFUSED",
+  countered: "OFFER",
+  referred: "WITH FINANCE",
 };
-const KEYS = ["w", "h", "top", "slant", "happy", "bottom", "lx", "ly", "gap"] as const;
 
-function inEye(gx: number, gy: number, cx: number, cy: number, e: Eye, blink: number, side: 1 | -1) {
-  const h = Math.max(0.2, e.h * (1 - blink));
-  const dx = gx - cx, dy = gy - cy;
-  if (Math.pow(Math.abs(dx / e.w), 4) + Math.pow(Math.abs(dy / h), 4) > 1) return false;
-  if (gy < cy - h + e.top + e.slant * side * dx * 1.4) return false;
-  if (e.bottom > 0.05 && dy > h - e.bottom) return false;
-  if (e.happy > 0.02) {
-    const r = e.w * 1.25 * e.happy, ccy = cy + h * 0.95;
-    if (dx * dx + (gy - ccy) * (gy - ccy) < r * r) return false;
-  }
-  return true;
-}
+/* Eye bitmaps: 8 wide x 11 tall, authored as the LEFT eye. The right eye mirrors it unless given. */
+const ROUND = [
+  "..####..",
+  ".######.",
+  "########",
+  "########",
+  "########",
+  "########",
+  "########",
+  "########",
+  "########",
+  ".######.",
+  "..####..",
+];
+const WIDE = [
+  ".######.",
+  "########",
+  "########",
+  "########",
+  "########",
+  "########",
+  "########",
+  "########",
+  "########",
+  "########",
+  ".######.",
+];
+const SQUINT = [
+  "........",
+  "........",
+  "........",
+  "........",
+  "########",
+  "########",
+  "########",
+  "########",
+  ".######.",
+  "..####..",
+  "........",
+];
+const HAPPY = [
+  "........",
+  "........",
+  "..####..",
+  ".######.",
+  "########",
+  "###..###",
+  "##....##",
+  "##....##",
+  "#......#",
+  "........",
+  "........",
+];
+const STERN = [
+  "##......",
+  "####....",
+  "######..",
+  "########",
+  "########",
+  "########",
+  "########",
+  "########",
+  ".######.",
+  "..####..",
+  "........",
+];
+const RAISED = [
+  ".######.",
+  "########",
+  "........",
+  "..####..",
+  ".######.",
+  "########",
+  "########",
+  "########",
+  ".######.",
+  "..####..",
+  "........",
+];
+const NEUTRAL = [
+  "........",
+  "........",
+  "........",
+  ".######.",
+  "########",
+  "########",
+  "########",
+  "########",
+  ".######.",
+  "........",
+  "........",
+];
 
-/** Clearance agent face: dot-matrix eyes on a mood aura. Same props as the old glass orb. */
+const mirror = (rows: string[]) => rows.map((r) => r.split("").reverse().join(""));
+const EYES: Record<OrbState, [string[], string[]]> = {
+  idle: [ROUND, ROUND],
+  listening: [WIDE, WIDE],
+  thinking: [SQUINT, SQUINT],
+  speaking: [ROUND, ROUND],
+  approved: [HAPPY, HAPPY],
+  declined: [STERN, mirror(STERN)],
+  countered: [SQUINT, RAISED],
+  referred: [NEUTRAL, NEUTRAL],
+};
+const EW = 8, EH = 11, GAP = 2.6; // gap between eyes in dot pitches
+const WASABI = [[-1.9, -0.9], [1.95, -0.75], [-1.6, 0.85], [1.75, 0.95], [0, -1.25], [-2.2, 0.1]];
+
+/**
+ * Clearance agent face. size <= 90: a squircle with mini eyes (home button).
+ * size > 90: a wide aura card (fills its container width, `size` px tall) with
+ * brand, status pill, big dot-matrix eyes and the status word.
+ */
 export function AgentOrb({ state, size = 160, level }: { state: OrbState; size?: number; level?: number }) {
+  const card = size > 90;
+  const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<OrbState>(state);
   const levelRef = useRef(level ?? 0);
@@ -49,22 +142,33 @@ export function AgentOrb({ state, size = 160, level }: { state: OrbState; size?:
   }, [state]);
 
   useEffect(() => {
+    const wrap = wrapRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
+    if (!wrap || !canvas || !ctx) return;
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(size * dpr);
-    canvas.height = Math.round(size * dpr);
+    let W = 0, H = 0;
+    const fit = () => {
+      W = wrap.clientWidth || size;
+      H = wrap.clientHeight || size;
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+      canvas.style.width = W + "px";
+      canvas.style.height = H + "px";
+    };
+    fit();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(fit) : null;
+    ro?.observe(wrap);
 
-    // Small faces (the home button) get a coarser grid so each dot stays legible.
-    const cols = size < 90 ? 15 : 22;
-    const scale = cols / 30; // eye shapes are authored for a 30-column grid
-    const pitch = canvas.width / cols;
-    const rows = Math.floor(canvas.height / pitch);
-    const cur: Eye = { ...EYES[stateRef.current] };
+    const N = EW * EH;
+    const vals = [new Float32Array(N), new Float32Array(N)];
+    const init = EYES[stateRef.current];
+    for (let s = 0; s < 2; s++) for (let i = 0; i < N; i++) vals[s][i] = init[s][Math.floor(i / EW)][i % EW] === "#" ? 1 : 0;
+    let wasabi = 0;
     const gaze = { x: 0, y: 0 };
-    let blink = 0, blinkAt = -1, nextBlink = performance.now() + 1800, raf = 0;
+    let gx = 0, gy = 0;
+    let blink = 0, blinkAt = -1, nextBlink = performance.now() + 1600, raf = 0;
 
     const onMove = (e: PointerEvent) => {
       const r = canvas.getBoundingClientRect();
@@ -76,49 +180,102 @@ export function AgentOrb({ state, size = 160, level }: { state: OrbState; size?:
     const frame = (now: number) => {
       const st = stateRef.current;
       const since = (now - changedAt.current) / 1000;
-      const tg: Eye = { ...EYES[st] };
-      if (st === "thinking" && !reduce) { tg.lx = Math.sin(now / 380) * 0.8; tg.ly = -0.6 + Math.sin(now / 900) * 0.15; }
-      if (st === "idle") { tg.lx = gaze.x; tg.ly += gaze.y * 0.6; }
-      if (st === "listening") tg.h *= 1 + Math.min(1, levelRef.current) * 0.25;
-      if (st === "speaking" && !reduce) tg.ly = Math.abs(Math.sin(now / 140)) * -0.35;
-      const k = reduce ? 1 : 0.16;
-      for (const key of KEYS) cur[key] += (tg[key] - cur[key]) * k;
-
-      if (!reduce && now > nextBlink && blinkAt < 0 && st !== "approved") blinkAt = now;
-      if (blinkAt >= 0) {
-        const b = (now - blinkAt) / 150;
-        blink = b < 1 ? b : b < 2 ? 2 - b : 0;
-        if (b >= 2) { blinkAt = -1; nextBlink = now + 2200 + Math.random() * 3200; }
+      const target = EYES[st];
+      const k = reduce ? 1 : 0.2;
+      for (let s = 0; s < 2; s++) {
+        const v = vals[s];
+        for (let i = 0; i < N; i++) {
+          const t = target[s][Math.floor(i / EW)][i % EW] === "#" ? 1 : 0;
+          // stagger by row so shapes "wipe" between moods
+          const kk = k * (0.55 + 0.45 * ((Math.floor(i / EW) % 3) / 2));
+          v[i] += (t - v[i]) * kk;
+        }
       }
-      // Declined: a short head-shake.
-      const shake = st === "declined" && since < 0.7 && !reduce ? Math.sin(since * 40) * (1 - since / 0.7) * 1.2 : 0;
+      wasabi += ((st === "approved" ? 1 : 0) - wasabi) * k;
 
-      const e: Eye = { ...cur, w: cur.w * scale, h: cur.h * scale, top: cur.top * scale, bottom: cur.bottom * scale };
-      const sep = cols * 0.17 + cur.gap * scale;
-      const mid = (cols - 1) / 2 + cur.lx * 2.2 * scale + shake;
-      const cy = (rows - 1) / 2 - 0.4 * scale + cur.ly * 1.6 * scale;
-      const offX = (canvas.width - cols * pitch) / 2 + pitch / 2, offY = (canvas.height - rows * pitch) / 2 + pitch / 2;
+      // gaze / bounce targets (in pitch units)
+      let tx = 0, ty = 0;
+      if (st === "idle") { tx = gaze.x * 0.7; ty = gaze.y * 0.4; }
+      if (st === "thinking" && !reduce) { tx = Math.sin(now / 420) * 1.1; ty = -0.2; }
+      if (st === "listening") ty = -Math.min(1, levelRef.current) * 0.9 + (reduce ? 0 : Math.sin(now / 260) * 0.12);
+      gx += (tx - gx) * (reduce ? 1 : 0.12);
+      gy += (ty - gy) * (reduce ? 1 : 0.2);
+      const pulse = st === "speaking" && !reduce ? 1 + 0.14 * Math.abs(Math.sin(now / 150)) : 1;
+      const shake = st === "declined" && since < 0.7 && !reduce ? Math.sin(since * 40) * (1 - since / 0.7) * 0.6 : 0;
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const on = inEye(c, r, mid - sep, cy, e, blink, 1) || inEye(c, r, mid + sep, cy, e, blink, -1);
+      const blinky = st === "idle" || st === "listening" || st === "speaking" || st === "referred";
+      if (!reduce && blinky && now > nextBlink && blinkAt < 0) blinkAt = now;
+      if (blinkAt >= 0) {
+        const b = (now - blinkAt) / 110;
+        blink = b < 1 ? b : b < 2 ? 2 - b : 0;
+        if (b >= 2) { blinkAt = -1; nextBlink = now + 2400 + Math.random() * 3000; }
+      }
+
+      // layout
+      const padTop = card ? 58 : 0, padBot = card ? 66 : 0;
+      const availW = card ? W - 48 : W * 0.78;
+      const availH = card ? H - padTop - padBot : H * 0.62;
+      const pitch = Math.min(card ? 17 : 99, availW / (EW * 2 + GAP + 2), availH / (EH + 1));
+      const cx = W / 2 + (gx + shake) * pitch;
+      const cy = padTop + availH / 2 + (card ? 0 : (H - availH) / 2 - 0) + gy * pitch;
+      const eyeOff = (EW + GAP) / 2 * pitch; // centre of each eye from mid
+      const rDot = pitch * (card ? 0.38 : 0.42) * pulse;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#fff";
+      for (let s = 0; s < 2; s++) {
+        const ex = cx + (s === 0 ? -eyeOff : eyeOff);
+        const v = vals[s];
+        for (let i = 0; i < N; i++) {
+          const a = v[i];
+          if (a < 0.03) continue;
+          const r = Math.floor(i / EW), c = i % EW;
+          const x = ex + (c - (EW - 1) / 2) * pitch;
+          const y = cy + (r - (EH - 1) / 2) * pitch * (1 - blink * 0.92);
+          ctx.globalAlpha = Math.min(1, a * 1.1) * 0.98;
           ctx.beginPath();
-          ctx.fillStyle = on ? "rgba(255,255,255,0.97)" : "rgba(255,255,255,0.16)";
-          ctx.arc(offX + c * pitch, offY + r * pitch, pitch * (on ? 0.4 : 0.16), 0, Math.PI * 2);
+          ctx.arc(x, y, rDot * (0.35 + 0.65 * a), 0, Math.PI * 2);
           ctx.fill();
         }
       }
+      if (wasabi > 0.03) {
+        ctx.fillStyle = "#E4F25A";
+        const span = (EW * 2 + GAP) * pitch / 2;
+        WASABI.forEach(([ax, ay], j) => {
+          const tw = reduce ? 1 : 0.6 + 0.4 * Math.sin(now / 300 + j * 1.7);
+          ctx.globalAlpha = wasabi * tw;
+          ctx.beginPath();
+          ctx.arc(cx + ax * span * 0.62, cy + ay * EH * pitch * 0.42, pitch * 0.3, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+      ctx.globalAlpha = 1;
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
-    return () => { cancelAnimationFrame(raf); window.removeEventListener("pointermove", onMove); };
-  }, [size]);
+    return () => { cancelAnimationFrame(raf); ro?.disconnect(); window.removeEventListener("pointermove", onMove); };
+  }, [size, card]);
 
+  const word = ORB_WORD[state];
   return (
-    <div className={`orb orb--${state}`} style={{ width: size, height: size }} data-state={state} aria-hidden>
+    <div
+      ref={wrapRef}
+      className={`orb orb--${state}${card ? " orb--card" : ""}`}
+      style={card ? { height: size } : { width: size, height: size }}
+      data-state={state}
+      aria-hidden
+    >
       <span className="orb-aura" />
-      <canvas ref={canvasRef} className="orb-canvas" style={{ width: size, height: size }} />
+      <span className="orb-grid" />
+      <canvas ref={canvasRef} className="orb-canvas" />
+      {card && (
+        <>
+          <div className="orb-brand">Clearance</div>
+          <div className="orb-pill"><i />{word}</div>
+          <div className="orb-word" key={word}>{word}</div>
+        </>
+      )}
     </div>
   );
 }

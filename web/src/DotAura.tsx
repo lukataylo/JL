@@ -3,7 +3,7 @@
  *  - Aura: rounded card with a blurred, slowly drifting gradient whose colours follow `state`.
  *  - DotNumber: count-up money figure set in Doto (dot matrix).
  *  - BudgetRuler: white tick ruler with a "spent" marker and released band.
- *  - GlassOrb: glossy merchant orb tinted by the --tint-N tokens.
+ *  - GlassOrb: flat bright tile tinted by the --tint-N tokens.
  *  - DotPager: decorative 4-dot pager under the hero.
  */
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -93,11 +93,11 @@ export function BudgetRuler({ budget, spent, released, className }: { budget: nu
   );
 }
 
-/** Glossy merchant orb. `tint` 1..8 maps to --tint-N-bg / --tint-N-fg. `label` is read by screen readers. */
+/** Flat colour tile (no gloss). `tint` 1..8 maps to --tint-N-bg / --tint-N-fg. `label` is read by screen readers. */
 export function GlassOrb({ tint, size = 44, label, children, className }: {
   tint: number; size?: number; label: string; children?: ReactNode; className?: string;
 }) {
-  const n = Math.min(8, Math.max(1, Math.round(tint) || 1));
+  const n = Math.min(9, Math.max(1, Math.round(tint) || 1));
   const style = { width: size, height: size, "--o-bg": `var(--tint-${n}-bg)`, "--o-fg": `var(--tint-${n}-fg)` } as CSSProperties;
   return (
     <span className={`da-orb${className ? ` ${className}` : ""}`} style={style} role="img" aria-label={label}>

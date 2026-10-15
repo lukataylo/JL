@@ -376,17 +376,42 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
             disabled={!SpeechRec || busy || final}
             aria-label={listening ? "Stop listening" : "Talk to Clearance"}
           >
-            <AgentOrb state={orbState} size={196} level={level} />
+            <AgentOrb state={orbState} size={300} level={level} />
           </button>
           <div className={`ra-status${tone ? ` ra-status--${tone}` : ""}`} aria-live="polite">{statusLine}</div>
-          {busy && (
-            <div className="ra-steps" aria-hidden>
-              {STEPS.map((s, i) => (
-                <span key={s} className={i < step ? "is-done" : i === step ? "is-on" : ""}>{s}</span>
-              ))}
-            </div>
-          )}
         </section>
+
+        {busy ? (
+          <div className="ra-steps" aria-hidden>
+            {STEPS.map((s, i) => (
+              <span key={s} className={i < step ? "is-done" : i === step ? "is-on" : ""}>{s}</span>
+            ))}
+          </div>
+        ) : listening ? (
+          <div className="ra-live" aria-live="polite">{interim || "Go ahead, I'm listening…"}</div>
+        ) : null}
+
+        {SpeechRec && !final && !(status === "countered" && !offerHidden) && (
+          <div className={`ra-voice${listening ? " is-on" : ""}`}>
+            {listening && <Bars level={level} />}
+            <button
+              type="button"
+              className={`ra-bigmic${listening ? " is-on" : ""}`}
+              onClick={listening ? stopListening : startListening}
+              disabled={busy}
+              aria-label={listening ? "Stop listening" : "Speak to Clearance"}
+            >
+              <span className="ra-ring" /><span className="ra-ring ra-ring--2" />
+              {listening ? (
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="3" /></svg>
+              ) : (
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0014 0M12 18v3" /></svg>
+              )}
+            </button>
+            {listening && <Bars level={level} flip />}
+            <div className="ra-voice-label">{listening ? "Tap to send" : busy ? "Clearance is thinking…" : "Tap to talk"}</div>
+          </div>
+        )}
 
         <div className="ra-chat" ref={scrollRef}>
           <div className="ra-msg ra-msg--agent"><div className="ra-bubble">{opening}</div></div>
@@ -400,7 +425,6 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
           ))}
           {pending && <div className="ra-msg ra-msg--employee"><div className="ra-bubble">{pending}</div></div>}
           {busy && <div className="ra-msg ra-msg--agent"><div className="ra-bubble ra-typing"><i /><i /><i /></div></div>}
-          {listening && <div className="ra-msg ra-msg--employee"><div className="ra-bubble ra-bubble--live">{interim || "…"}</div></div>}
         </div>
 
         <div className="ra-dock">
@@ -470,7 +494,7 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
                 </div>
               )}
               <form
-                className="ra-inputrow"
+                className={`ra-inputrow${SpeechRec ? " ra-inputrow--slim" : ""}`}
                 onSubmit={(e) => { e.preventDefault(); primeSpeech(); void send(text); }}
               >
                 <div className="ra-pill">
@@ -478,7 +502,7 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
                     ref={inputRef}
                     value={text}
                     onChange={(e) => setText(e.target.value)}
-                    placeholder={req ? "Reply to Clearance…" : "e.g. £60 client lunch today"}
+                    placeholder={SpeechRec ? (req ? "Or type a reply…" : "Or type it — e.g. £60 client lunch") : req ? "Reply to Clearance…" : "e.g. £60 client lunch today"}
                     disabled={busy || listening}
                     enterKeyHint="send"
                     aria-label="Message Clearance"
@@ -487,27 +511,32 @@ export function RequestAgent({ employee, category = null, onClose, onChange }: {
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
                   </button>
                 </div>
-                {SpeechRec && (
-                  <button
-                    type="button"
-                    className={`ra-mic${listening ? " is-on" : ""}`}
-                    onClick={listening ? stopListening : startListening}
-                    disabled={busy}
-                    aria-label={listening ? "Stop listening" : "Speak to Clearance"}
-                  >
-                    {listening ? (
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="3" /></svg>
-                    ) : (
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0014 0M12 18v3" /></svg>
-                    )}
-                  </button>
-                )}
               </form>
-              {!SpeechRec && <div className="ra-hint">Voice isn't supported in this browser — type your request.</div>}
+              {!SpeechRec && <div className="ra-hint">Voice needs Chrome or Safari — type your request instead.</div>}
             </>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Dot-matrix level meter: columns of dots that rise with the mic level. */
+function Bars({ level, flip }: { level: number; flip?: boolean }) {
+  const t = performance.now() / 140;
+  const cols = 6;
+  return (
+    <div className={`ra-bars${flip ? " ra-bars--flip" : ""}`} aria-hidden>
+      {Array.from({ length: cols }, (_, c) => {
+        const wob = 0.55 + 0.45 * Math.sin(t + c * 1.3);
+        const lvl = Math.max(0.12, Math.min(1, (level || 0.18) * 1.6 * wob * (1 - c * 0.08)));
+        const on = Math.max(1, Math.round(lvl * 5));
+        return (
+          <span key={c} className="ra-bar">
+            {Array.from({ length: 5 }, (_, r) => <i key={r} className={4 - r < on ? "on" : ""} />)}
+          </span>
+        );
+      })}
     </div>
   );
 }
